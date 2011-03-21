@@ -1,0 +1,242 @@
+================================================================================
+Quick Install
+
+- Install MiniSat and Mini Circuit Library. Below the location of
+  MiniSat headers and library files is referred to as $MINC and $MLIB
+  respectively, and similarly the header and library locations for MCL
+  is referred to as $MCLINC and $MCLLIB. If installed in a system-wide
+  default location these locations are not necessary to specify by the
+  user, and the configuration step becomes simpler.
+
+- Configure the library dependencies:
+
+  [ the exact details here may be simplified in the future ]
+
+  > make config MINISAT_INCLUDE=-I$MINC
+  > make config MINISAT_LIB="-L$MLIB -lminisat"
+  > make config MCL_INCLUDE=-I$MCLINC
+  > make config MCL_LIB="-L$MCLINC -lmcl"
+
+- Decide where to install the files . The simplest approach is to use
+  GNU standard locations and just set a "prefix" for the root install
+  directory (reffered to as $PREFIX below). More control can be
+  achieved by overriding other of the GNU standard install locations
+  (includedir, bindir, etc). Configuring with just a prefix:
+
+  > make config prefix=$PREFIX
+
+- Compiling and installing:
+
+  > make install
+
+================================================================================
+Configuration
+
+- Multiple configuration steps can be joined into one call to "make
+  config" by appending multiple variable assignments on the same line.
+
+- The configuration is stored in the file "config.mk". Look here if
+  you want to know what the current configuration looks like.
+
+- To reset from defaults simply remove the "config.mk" file or call
+  "make distclean".
+
+- Recompilation can be done without the configuration step.
+
+  [ TODO: describe configartion possibilities for compile flags / modes ]
+
+================================================================================
+Building
+
+  [ TODO: describe seperate build modes ]
+
+================================================================================
+Install
+
+  [ TODO: ? ]
+
+-------------------- HELP SECTION ----------------------------------------------
+
+OVERVIEW:
+
+  Disclaimer:
+
+    This version of Tip is similar to the version of tip that we
+    submitted to the Hardware Model Checking Competition 2008, but has
+    been cleaned up to a small extent and has had some features added
+    on the usability side (resource controls etc).
+
+    It is experimental software and has therefore more than a few
+    deficiencies and kinks. This is noticed particularly in
+    scalability problems of a couple of transformations, but there are
+    also bound to be bugs and at least one of the more strange are
+    known to be unsound in certain combinations ("Lazy Locally
+    Shortest Path" activated by the option "-lsp"). Sticking to the
+    simpler stuff should be safe though, and bugs found here I'd be
+    interested to know about.
+
+    Before we release this we really ought to rewrite large parts from
+    scrath, but at the very least remove some of the parts that are
+    either not useful, buggy, or completely unused.
+
+  Usage:
+
+    tip [-trace=<witness-file>] [other-options] <AIGER-input> 
+
+  Help:
+
+    tip --help
+
+  or with a bit more information:
+
+    tip --help-verb 
+
+
+TRANSFORMATIONS/ANALYZES:
+
+   Phase-abstraction:
+
+     We were initially unaware of the paper on Phase-abstraction but
+     implemented something similar, but less general. We detect the
+     largest sub-circuit that does not depend on any input and unroll
+     the circuit with respect to the repeating behavior of this
+     sub-circuit. What is worth to note here is that we don't handle
+     the case were such a sub-circuit is very large, and will happily
+     unroll the circuit arbitrarily long. If this happens turn off this
+     transformation with "-no-deterministic".
+
+     UPDATE: I've since learned that what we do is not actually quite
+     the same as phase-abstraction. It can be seen as a mixture of
+     phase-abstraction as in the paper by Bjesse et.al:
+
+      "Automatic Generalized Phase Abstraction for Formal Verification"
+
+     and the transform used in the paper by Case et.al:
+
+      "Enhanced Verification by Temporal Decomposition"
+
+   Safe-Region Analysis (AKA constraint analysis):
+
+     A safe-region is defined as a set of states where we know that
+     the property will stay true for ever. The main motivation for
+     this analysis is to detect user-provided assumptions (or
+     constraints) that has been encoded into the circuit and the
+     property. The AIGER format does not currently allow this so some
+     circuits has constraints encoded like this. The concept can
+     generalized however, since it is equivalent to backward-invariants
+     (properties that are invariant if you reverse the transition
+     relation and initialize with the bad states).
+
+     We implement two algorithms:
+
+       -pconstr 
+
+          Point-constraints: finds all internal points of the circuit
+          that correspond to assumptions (or constraints).
+
+       -econstr
+
+          Expression-constraints, uses a simple three-valued backwards
+          fixed-point algorithm to calculate a single global
+          constraint.
+
+     These two can also be combined. Currently point-constraints have
+     proven to be useful and commonly occurring in hardware
+     verification, but it should be noted that the current
+     implementation is rather slow but usually works fine on smaller
+     problems. Expression-constraints are still not seariously
+     evaluated unfortunately so we do not yet know how useful it is.
+
+     For both of these analyses, the main use is to strengthen the
+     signal-correpsondence transformation (mention below).
+
+   Signal Correspondence:
+
+     Finds invariant equivalences between internal points of the
+     circuit (van Eijk style). The main feature is that this is done
+     with respect to the constraints found in previous phases and may
+     therefore find more invariants than plain signal
+     correspondence. The drawback is that it is harder to use random
+     simulation to filter candidates, and while implementing this I
+     tried to get by without random simulation completely. It is also
+     does not degrade gracefully in the sense that there is no
+     resource control, for a given depth it will always compute all
+     equivalences.
+
+     Altogether this is the algorithm that is most problematic from a
+     scalability point-of-view in the current implementation. There is
+     much more work to make this more usable.
+
+     The user controls that exists are:
+
+        -inv=0, turn it off completely.
+
+        -inv=k, use induction of depth k for (default is set to 2).
+
+     There also exists an early version of a backwards invariant
+     extraction that can be used to derive even stronger
+     constraints. It is controlled in a similar way as forward
+     invariants:
+
+        -bwd-inv=0, turn off completely (default)
+        -bwd-inv=k, use induction of depth k
+
+     The backward invariants are currently not very useful as the way
+     the derived invariants are utilized are very poor at the moment.
+   
+   Misc:
+
+     Very basic Retiming (-retime), and Dag-aware rewriting
+     (-dagshrink) are both usually very cheap to run. The retiming is
+     very stupidly implemented thought and have been known to be slow
+     sometimes.
+
+MAIN-SOLVERS:
+
+   There are a two back-end solvers and which is run is controlled by
+   the "-strategy" option:
+
+
+     "-strategy=bmc", This runs a plain (forwards) incremental BMC
+     algorithm. As a lot of default analyses/transformations don't
+     make much sense for BMC it is best to turn them off. So a typical
+     BMC run should look like this:
+
+     $ tip -strategy=bmc -no-deterministic -inv=0 -no-pconstr <input-file>
+
+     It should have been like this in default mode but you can make a
+     script for this in the meantime.
+
+     "-strategy=ind", This runs a simple (backwards) incremental
+     induction algorithm with lazy addition of unique state
+     constraints. The base case and the step case is interleaved in
+     the same solver.
+
+     There are two extention algorithms for induction that can be
+     activated:
+
+     -lsp
+
+     A lazy approximation of locally-shortest-path constraints. This
+     is still pretty naively implemented, for each counter example to
+     the induction step we examine each pair of states and see if
+     there is a shorter path between them. This in turn is done by
+     making a BMC call with the pair of states as initial and bad
+     states. Much more work remains to make this less naive, but also
+     to evaluate whether it is useful at all. At this point we don't
+     know much. 
+
+     UPDATE: We've found cases were this is unsound. I don't recall
+     exactly right now, but I think it was triggered in the precence
+     of constraints and may still be safe without them. It's safest to
+     ignore this algorithm for now though.
+
+     -dyn-inv 
+
+     A counter example guided signal correspondence that tries to find
+     invariants that rule out a particular counter example to the
+     induction step. The invariants are not only equivalences but also
+     clauses of a small size are considered (up to size 3 I
+     think). This implementation is very slow currently, and also
+     requires much more work before we can investigate whether the
+     idea works or not.

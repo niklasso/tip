@@ -1,0 +1,6 @@
+*.d
+*.o
+build/*/bin/tip
+config.mk
+lib*.so*
+lib*.a
