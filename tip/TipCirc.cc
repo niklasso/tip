@@ -39,11 +39,15 @@ namespace Tip {
             all_props.push(properties.newProperty(~b.outs[i], ptype_Safety));
     }
 
-    void TipCirc::bmc(uint32_t begin_cycle, uint32_t stop_cycle, bool simp){
-        if (simp)
-            simpBmc (*this, begin_cycle, stop_cycle); 
-        else
-            basicBmc(*this, begin_cycle, stop_cycle); 
+    void TipCirc::bmc(uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver){
+        if (bver == bmc_Basic)
+            basicBmc(*this, begin_cycle, stop_cycle);
+        else if (bver == bmc_Simp)
+            simpBmc (*this, begin_cycle, stop_cycle);
+        else{
+            assert(bver == bmc_Simp2);
+            simpBmc2(*this, begin_cycle, stop_cycle);
+        }
     }
 
 };

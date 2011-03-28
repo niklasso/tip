@@ -69,10 +69,10 @@ public:
     Property   newProperty      (Sig s, PropType t)    { prop_set.push(PropData(s,t)); return prop_set.size()-1; }
     void       setPropTrue      (Property p)           { assert(p < (Property)prop_set.size()); prop_set[p].stat = pstat_True; }
     void       setPropFalsified (Property p, Trace cex){ assert(p < (Property)prop_set.size()); prop_set[p].stat = pstat_True; prop_set[p].cex = cex; }
-    Sig        propSig          (Property p)           { assert(p < (Property)prop_set.size()); return prop_set[p].sig; }
-    PropType   propType         (Property p)           { assert(p < (Property)prop_set.size()); return prop_set[p].type; }
-    PropStatus propStatus       (Property p)           { assert(p < (Property)prop_set.size()); return prop_set[p].stat; }
-    Trace      propCex          (Property p)           { assert(p < (Property)prop_set.size()); return prop_set[p].cex; }
+    Sig        propSig          (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].sig; }
+    PropType   propType         (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].type; }
+    PropStatus propStatus       (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].stat; }
+    Trace      propCex          (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].cex; }
 private:
     struct PropData {
         Sig        sig;
@@ -96,7 +96,8 @@ public:
     void writeAiger    (const char* file);
     void printAigerRes (const char* file);
 
-    void bmc           (uint32_t begin_cycle, uint32_t stop_cycle, bool simp);
+    typedef enum { bmc_Basic = 0, bmc_Simp = 1, bmc_Simp2 = 2 } BmcVersion;
+    void bmc           (uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver = bmc_Basic);
 
     //TODO: hide data somehow?
     // private:

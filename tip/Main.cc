@@ -27,7 +27,7 @@ int main(int argc, char** argv)
 {
     setlinebuf(stdout);
     setUsageHelp("USAGE: %s [options] <input-file> <result-output-file>\n\n  where input is in plain or gzipped binary AIGER.\n");
-    BoolOption simp ("MAIN", "simp", "Use preprocessing BMC implementation.", false);
+    IntOption bver("MAIN", "bv",  "Version of BMC to be used.", 0, IntRange(0,2));
 
     parseOptions(argc, argv, true);
 
@@ -36,7 +36,7 @@ int main(int argc, char** argv)
 
     TipCirc tc;
     tc.readAiger(argv[1]);
-    tc.bmc(0,UINT32_MAX, simp);
+    tc.bmc(0,UINT32_MAX, (TipCirc::BmcVersion)(int)bver);
 
     exit(0);
 }

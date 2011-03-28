@@ -127,6 +127,7 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             }else{
                 unresolved_safety++;
                 //printf (" ... property true.\n");
+                assert(s.value(plit) == l_True);
             }
         }
 

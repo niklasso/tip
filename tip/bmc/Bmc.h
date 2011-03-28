@@ -29,6 +29,7 @@ namespace Tip {
 
 void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle);
 void simpBmc (TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle);
+void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle);
 
 //=================================================================================================
 
