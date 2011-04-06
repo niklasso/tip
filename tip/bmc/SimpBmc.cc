@@ -118,7 +118,7 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
                 continue;
             
             Lit plit = ucl.lookup(tip.properties.propSig(p));
-            printf(" --- cycle=%3d, vars=%8.3g, clauses=%8.3g\n", i, (double)s.nFreeVars(), (double)s.nClauses());
+            printf(" --- cycle=%3d, vars=%8.3g, clauses=%8.3g, conflicts=%8.3g\n", i, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
 
             //printf(" ... testing property %d\n", p);
             if (s.solve(~plit, false, false)){
@@ -139,6 +139,7 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
         if (unresolved_safety == 0)
             break;
     }
+    printf(" --- done, vars=%8.3g, clauses=%8.3g, conflicts=%8.3g\n", (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
 }
 
 };

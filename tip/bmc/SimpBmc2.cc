@@ -712,7 +712,7 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             Sig psig = tip.properties.propSig(p);
             Lit plit = cl_map[gate(psig)] ^ sign(psig);
             assert(plit != lit_Undef);
-            printf(" --- cycle=%3d, vars=%8.3g, clauses=%8.3g\n", i, (double)s.nFreeVars(), (double)s.nClauses());
+            printf(" --- cycle=%3d, vars=%8.3g, clauses=%8.3g, conflicts=%8.3g\n", i, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
 
             //printf(" ... testing property %d: %s%d=%c\n", p, sign(plit)?"-":"", var(plit),
             // s.value(plit)==l_Undef?'x':s.value(plit)==l_True?'1':'0');
@@ -737,6 +737,7 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
         if (unresolved_safety == 0)
             break;
     }
+    printf(" --- done, vars=%8.3g, clauses=%8.3g, conflicts=%8.3g\n", (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
 }
 
 };
