@@ -49,11 +49,11 @@ struct FrontPair {
 
 
     void printMap(const Circ& c, const GMap<Sig>& m, const char* map_name){
-        for (Gate g = c.firstGate(); g != gate_Undef; g = c.nextGate(g)){
+        for (GateIt git = c.begin(); git != c.end(); ++git){
             printf("  %s[", map_name);
-            printGate(g);
+            printGate(*git);
             printf("] = ");
-            printSig(m[g]);
+            printSig(m[*git]);
             printf("\n");
         }
     }
@@ -75,8 +75,8 @@ void instantiateCirc(const TipCirc& t, const Equivs& eq, CircInstance& inst)
     subst.moveTo(inst.map);
 
     // Debug (check that all gates in 'inst.map' is withing bounds for 'inst.circ':
-    for (Gate g = t.main.firstGate(); g != gate_Undef; g = t.main.nextGate(g)){
-        Sig x  = inst.map[g];
+    for (GateIt git = t.main.begin(); git != t.main.end(); ++git){
+        Sig x  = inst.map[*git];
         assert(x <= ~mkSig(inst.circ.lastGate())); }
 
     // Remove redundant logic in instance:
@@ -119,7 +119,7 @@ void instantiateCirc(const TipCirc& t, const Equivs& eq, CircInstance& inst)
     //        inst.circ.nGates(), inst.circ.nInps(), t.main.nGates(), t.main.nInps());
 
     // Check that all gates in 'inst.map' is withing bounds for 'inst.circ' or undefined:
-    for (Gate g = t.main.firstGate(); g != gate_Undef; g = t.main.nextGate(g)){
+    for (GateIt git = t.main.begin(); git != t.main.end(); ++git){
         // if (!(inst.map[g] == sig_Undef || inst.map[g] <= ~mkSig(inst.circ.lastGate()))){
         //     printf(" --- g = ");printGate(g);printf("\n");
         //     printf(" --- inst_map[g] = ");printSig(inst.map[g]);printf("\n");
@@ -130,7 +130,7 @@ void instantiateCirc(const TipCirc& t, const Equivs& eq, CircInstance& inst)
         //     printf(" --- gate_True = ");printGate(gate_True);printf("\n");
         //     printf(" --- ~mkSig(inst.circ.lastGate()) = ");printSig(~mkSig(inst.circ.lastGate()));printf("\n");
         // }
-        assert(inst.map[g] == sig_Undef || inst.map[g] <= ~mkSig(inst.circ.lastGate()));
+        assert(inst.map[*git] == sig_Undef || inst.map[*git] <= ~mkSig(inst.circ.lastGate()));
     }
 }
 
@@ -259,11 +259,11 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
     // Extract references to all clausified gates:
     lit_map.clear();
     lit_map.growTo(t.main.lastGate(), lit_Undef);
-    for (Gate g = t.main.firstGate(); g != gate_Undef; g = t.main.nextGate(g))
-        if (inst.map.has(g) && inst.map[g] != sig_Undef){
-            Lit l = cl.lookup(inst.map[g]);
+    for (GateIt git = t.main.begin(); git != t.main.end(); ++git)
+        if (inst.map.has(*git) && inst.map[*git] != sig_Undef){
+            Lit l = cl.lookup(inst.map[*git]);
             if (l != lit_Undef && !s.isEliminated(var(l)))
-                lit_map[g] = l;
+                lit_map[*git] = l;
         }
     // Also extract the constant true if referred to:
     if (cl.lookup(sig_True) != lit_Undef)
@@ -393,8 +393,8 @@ void plugClausifiedInstance(const TipCirc& t, const SimpSolver& one, const GMap<
     // Construct map from main to copied CNF instance:
     s_lit_map.clear();
     s_lit_map.growTo(t.main.lastGate(), lit_Undef);
-    for (Gate g = t.main.firstGate(); g != gate_Undef; g = t.main.nextGate(g)){
-        Lit one_lit = one_lit_map[g];
+    for (GateIt git = t.main.begin(); git != t.main.end(); ++git){
+        Lit one_lit = one_lit_map[*git];
         if (one_lit != lit_Undef){
             Lit s_lit = lit_remap[var(one_lit)] ^ sign(one_lit);
             // if (s_lit == lit_Undef){
@@ -404,7 +404,7 @@ void plugClausifiedInstance(const TipCirc& t, const SimpSolver& one, const GMap<
             //     printf(" => s_lit=%s%d\n", sign(s_lit)?"-":"", var(s_lit));
             // }
             assert(s_lit != lit_Undef);
-            s_lit_map[g] = s_lit;
+            s_lit_map[*git] = s_lit;
 
             // if (type(g) == gtype_Inp && !t.flps.isFlop(g)){
             //     printf (" === input %d => (one) lit %s%d => (s) lit %s%d\n",

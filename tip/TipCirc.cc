@@ -73,27 +73,27 @@ namespace Tip {
     {
         // Print main circuit:
         printf("MAIN:\n");
-        for (Gate g = main.firstGate(); g != gate_Undef; g = main.nextGate(g))
-            if (type(g) == gtype_Inp)
-                if (flps.isFlop(g)){
-                    printf("next("); printGate(g); printf(") = "); printSig(flps.next(g)); printf("\n");
-                    printf("init("); printGate(g); printf(") = "); printSig(flps.init(g)); printf("\n");
+        for (GateIt git = main.begin(); git != main.end(); ++git)
+            if (type(*git) == gtype_Inp)
+                if (flps.isFlop(*git)){
+                    printf("next("); printGate(*git); printf(") = "); printSig(flps.next(*git)); printf("\n");
+                    printf("init("); printGate(*git); printf(") = "); printSig(flps.init(*git)); printf("\n");
                 }else{
-                    printGate(g); printf(" = <inp>\n");
+                    printGate(*git); printf(" = <inp>\n");
                 }
             else{
-                printGate(g); printf(" = "); 
-                printSig(main.lchild(g)); printf(" & "); printSig(main.rchild(g)); printf("\n");
+                printGate(*git); printf(" = "); 
+                printSig(main.lchild(*git)); printf(" & "); printSig(main.rchild(*git)); printf("\n");
             }
 
         // Print init circuit:
         printf("INIT:\n");
-        for (Gate g = init.firstGate(); g != gate_Undef; g = init.nextGate(g))
-            if (type(g) == gtype_Inp){
-                printGate(g); printf(" = <inp>\n");
+        for (GateIt git = init.begin(); git != init.end(); ++git)
+            if (type(*git) == gtype_Inp){
+                printGate(*git); printf(" = <inp>\n");
             }else{
-                printGate(g); printf(" = "); 
-                printSig(main.lchild(g)); printf(" & "); printSig(main.rchild(g)); printf("\n");
+                printGate(*git); printf(" = "); 
+                printSig(main.lchild(*git)); printf(" & "); printSig(main.rchild(*git)); printf("\n");
             }
 
         printf("PROPS:\n");
