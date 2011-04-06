@@ -18,6 +18,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include "mcl/Aiger.h"
+#include "mcl/CircPrelude.h"
 #include "tip/TipCirc.h"
 #include "tip/bmc/Bmc.h"
 
@@ -47,6 +48,60 @@ namespace Tip {
         else{
             assert(bver == bmc_Simp2);
             simpBmc2(*this, begin_cycle, stop_cycle);
+        }
+    }
+
+
+    void TipCirc::printTrace(Trace tid)
+    {
+        const vec<vec<lbool> >& tr = traces.getFrames(tid);
+        for (int i = 0; i < tr.size(); i++){
+            for (int j = 0; j < tr[i].size(); j++)
+                if (tr[i][j] == l_Undef)
+                    printf("x");
+                else if (tr[i][j] == l_False)
+                    printf("0");
+                else{
+                    assert(tr[i][j] == l_True);
+                    printf("1");
+                }
+            printf("\n");
+        }
+    }
+
+    void TipCirc::printCirc()
+    {
+        // Print main circuit:
+        printf("MAIN:\n");
+        for (Gate g = main.firstGate(); g != gate_Undef; g = main.nextGate(g))
+            if (type(g) == gtype_Inp)
+                if (flps.isFlop(g)){
+                    printf("next("); printGate(g); printf(") = "); printSig(flps.next(g)); printf("\n");
+                    printf("init("); printGate(g); printf(") = "); printSig(flps.init(g)); printf("\n");
+                }else{
+                    printGate(g); printf(" = <inp>\n");
+                }
+            else{
+                printGate(g); printf(" = "); 
+                printSig(main.lchild(g)); printf(" & "); printSig(main.rchild(g)); printf("\n");
+            }
+
+        // Print init circuit:
+        printf("INIT:\n");
+        for (Gate g = init.firstGate(); g != gate_Undef; g = init.nextGate(g))
+            if (type(g) == gtype_Inp){
+                printGate(g); printf(" = <inp>\n");
+            }else{
+                printGate(g); printf(" = "); 
+                printSig(main.lchild(g)); printf(" & "); printSig(main.rchild(g)); printf("\n");
+            }
+
+        printf("PROPS:\n");
+        for (int i = 0; i < all_props.size(); i++){
+            Property p = all_props[i];
+            Sig      psig = properties.propSig(p);
+            printSig(psig);
+            printf("\n");
         }
     }
 

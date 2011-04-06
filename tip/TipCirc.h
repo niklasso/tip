@@ -46,16 +46,16 @@ enum { prop_Undef  = UINT32_MAX };
 
 class TraceSet {
 public:
-    Trace         newTrace ()         { trace_set.push(); return trace_set.size()-1; }
-    vec<IFrame>&  getFrames(Trace tr) { assert(tr < (Trace)trace_set.size()); return trace_set[tr].frames; }
-    uint32_t&     getLoop  (Trace tr) { assert(tr < (Trace)trace_set.size()); return trace_set[tr].loop; }
+    Trace             newTrace ()         { trace_set.push(); return trace_set.size()-1; }
+    vec<vec<lbool> >& getFrames(Trace tr) { assert(tr < (Trace)trace_set.size()); return trace_set[tr].frames; }
+    uint32_t&         getLoop  (Trace tr) { assert(tr < (Trace)trace_set.size()); return trace_set[tr].loop; }
 
     enum { loop_none = UINT32_MAX };
 
 private:
     struct TraceData {
-        vec<IFrame> frames;
-        uint32_t    loop;
+        vec<vec<lbool> > frames;
+        uint32_t         loop;
         TraceData() : loop(loop_none){}
     };
     vec<TraceData> trace_set;
@@ -98,6 +98,10 @@ public:
 
     typedef enum { bmc_Basic = 0, bmc_Simp = 1, bmc_Simp2 = 2 } BmcVersion;
     void bmc           (uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver = bmc_Basic);
+
+    // Helpers:
+    void printTrace    (Trace t);
+    void printCirc     ();
 
     //TODO: hide data somehow?
     // private:
