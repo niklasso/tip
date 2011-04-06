@@ -48,6 +48,23 @@ struct FrontPair {
 };
 
 
+    void printMap(const Circ& c, const GMap<Sig>& m, const char* map_name){
+        for (Gate g = c.firstGate(); g != gate_Undef; g = c.nextGate(g)){
+            printf("  %s[", map_name);
+            printGate(g);
+            printf("] = ");
+            printSig(m[g]);
+            printf("\n");
+        }
+    }
+
+    template<class Lits>
+    void printLits(const Lits& cs){
+        for (int i = 0; i < cs.size(); i++)
+            printf("%s%d ", sign(cs[i])?"-":"", var(cs[i]));
+    }
+
+
 void instantiateCirc(const TipCirc& t, const Equivs& eq, CircInstance& inst)
 {
     // Create substitution from 'Equivs':
@@ -83,41 +100,161 @@ void instantiateCirc(const TipCirc& t, const Equivs& eq, CircInstance& inst)
         Sig prop_t    = t.properties.propSig(p);
         Sig prop_inst = inst.map[gate(prop_t)] ^ sign(prop_t);
         dagShrink(inst.circ, reduced_inst, gate(prop_inst), cm, reduced_map, rnd_seed);
+
+        // printf(" ... prop_t = "); printSig(prop_t); printf("\n");
+        // printf(" ... reduced_map[gate(prop_inst)] ^ sign(prop_inst) = "); printSig(reduced_map[gate(prop_inst)] ^ sign(prop_inst)); printf("\n");
     }
 
+    // printMap(t.main, inst.map, "inst.map");
+    // printMap(inst.circ, reduced_map, "reduced_map");
+    
     // Fix the output circuit/map:
     reduced_inst.moveTo(inst.circ);
     map(reduced_map, inst.map);
 
+    // printMap(t.main, inst.map, "inst.map");
+
     // Debug:
-    printf(" ... clausifyInstance(): circuit-size=%d, main-size=%d\n", inst.circ.size(), t.main.size());
+    // printf(" ... instanciateCirc(): inst-size { ands=%d, inps=%d }, main-size { ands=%d, inps=%d }\n", 
+    //        inst.circ.nGates(), inst.circ.nInps(), t.main.nGates(), t.main.nInps());
 
     // Check that all gates in 'inst.map' is withing bounds for 'inst.circ' or undefined:
-    for (Gate g = t.main.firstGate(); g != gate_Undef; g = t.main.nextGate(g))
+    for (Gate g = t.main.firstGate(); g != gate_Undef; g = t.main.nextGate(g)){
+        // if (!(inst.map[g] == sig_Undef || inst.map[g] <= ~mkSig(inst.circ.lastGate()))){
+        //     printf(" --- g = ");printGate(g);printf("\n");
+        //     printf(" --- inst_map[g] = ");printSig(inst.map[g]);printf("\n");
+        //     Gate last = inst.circ.lastGate();
+        //     printf(" --- inst.circ.lastGate() = ");printGate(inst.circ.lastGate());printf("\n");
+        //     printf(" --- last = ");printGate(last);printf("\n");
+        //     printf(" --- last.x = %d\n", last.x);
+        //     printf(" --- gate_True = ");printGate(gate_True);printf("\n");
+        //     printf(" --- ~mkSig(inst.circ.lastGate()) = ");printSig(~mkSig(inst.circ.lastGate()));printf("\n");
+        // }
         assert(inst.map[g] == sig_Undef || inst.map[g] <= ~mkSig(inst.circ.lastGate()));
+    }
 }
 
 
 void clausifyInstance(const TipCirc& t, const CircInstance& inst, 
                       SimpSolver& s, GMap<Lit>& lit_map /* t.main => s */)
 {
-#if 1
     Clausifyer<SimpSolver> cl(inst.circ, s);
+    vec<Var>               frozen;
 
-    // Clausify flop-definitions:
+    // Clausify & freeze flop-definitions:
     for (int i = 0; i < t.flps.size(); i++){
         Sig flop_next_t            = t.flps.next(t.flps[i]);
         Sig flop_next_inst         = inst.map[gate(flop_next_t)] ^ sign(flop_next_t);
+        assert(flop_next_inst != sig_Undef);
         Lit l                      = cl.clausify(flop_next_inst);
+        // printf(" ... froze (flop-def) %d\n", var(l));
+        s.setFrozen(var(l), true);
+        frozen.push(var(l));
     }
 
-    // Clausify properties:
+    // Clausify & freeze properties:
     for (int i = 0; i < t.all_props.size(); i++){
         Property p            = t.all_props[i];
         Sig prop_t            = t.properties.propSig(p);
         Sig prop_inst         = inst.map[gate(prop_t)] ^ sign(prop_t);
+        assert(prop_inst != sig_Undef);
         Lit l                 = cl.clausify(prop_inst);
+        // printf(" ... froze (property) %d\n", var(l));
+        s.setFrozen(var(l), true);
+        frozen.push(var(l));
     }
+
+    // Freeze all (used) inputs:
+    for (int i = 0; i < t.inps_main.size(); i++)
+        for (int j = 0; j < t.inps_main[i].size(); j++){
+            Gate inp      = t.inps_main[i][j];
+            Sig  inp_inst = inst.map[inp];
+            if (inp_inst != sig_Undef){
+                Lit l = cl.lookup(inp_inst);
+                if (l != lit_Undef){
+                    // printf(" ... froze (input) "); printGate(inp);
+                    // printf(" => "); printSig(inp_inst);
+                    // printf(" => %s%d\n", sign(l)?"-":"", var(l));
+                    s.setFrozen(var(l), true);
+                    frozen.push(var(l));
+                }
+            }
+        }
+
+    // Freeze all (used) flops:
+    for (int i = 0; i < t.flps.size(); i++){
+        Gate flop      = t.flps[i];
+        Sig  flop_inst = inst.map[flop];
+        if (flop_inst != sig_Undef){
+            Lit l = cl.lookup(flop_inst);
+            if (l != lit_Undef){
+                // printf(" ... froze (flop) "); printGate(flop);
+                // printf(" => "); printSig(flop_inst);
+                // printf(" => %s%d\n", sign(l)?"-":"", var(l));
+                s.setFrozen(var(l), true);
+                frozen.push(var(l));
+            }
+        }
+    }    
+
+#if 0
+    {
+        Lit true_lit  = cl.lookup(gate_True);
+        printf("  CNF["); printGate(gate_True); 
+        printf("] => "); printSig(sig_True);
+        if (true_lit != lit_Undef)
+            printf(" => %s%d\n", sign(true_lit)?"-":"", var(true_lit));
+        else
+            printf(" => x\n");
+    }
+    for (Gate g = t.main.firstGate(); g != gate_Undef; g = t.main.nextGate(g)){
+        Sig g_inst = inst.map[g];
+        if (g_inst != sig_Undef){
+            Lit g_lit  = cl.lookup(g_inst);
+            printf("  CNF["); printGate(g); printf("] => "); printSig(g_inst);
+            if (g_lit != lit_Undef)
+                printf(" => %s%d\n", sign(g_lit)?"-":"", var(g_lit));
+            else
+                printf(" => x\n");
+        }else{
+            printf("  CNF["); printGate(g); printf("] => x\n");
+        }
+    }
+    for (TrailIterator ti = s.trailBegin(); ti != s.trailEnd(); ++ti)
+        printf("  unit: %s%d\n", sign(*ti)?"-":"", var(*ti));
+        
+    for (ClauseIterator ci = s.clausesBegin(); ci != s.clausesEnd(); ++ci){
+        printf("  clause: ");
+        printLits(*ci);
+        printf("\n");
+    }
+
+    for (int i = 0; i < t.all_props.size(); i++){
+        Property p            = t.all_props[i];
+        Sig prop_t            = t.properties.propSig(p);
+        Sig prop_inst         = inst.map[gate(prop_t)] ^ sign(prop_t);
+        Lit prop_lit          = cl.lookup(prop_inst);
+        printf("  prop %d", i);
+        printf(" => "); printSig(prop_inst);
+        printf(" => ");
+        if (prop_lit != lit_Undef)
+            printf("%s%d\n", sign(prop_lit)?"-":"", var(prop_lit));
+        else
+            printf("x\n");
+    }        
+#endif
+
+    printf(" ... clausifyInstance(): (ORIG) vars=%d, clauses=%d\n", s.nFreeVars(), s.nClauses());
+    // Simplify & unfreeze variables:
+
+    s.eliminate();
+    //s.simplify();
+
+    // TODO: not sure if it matters to unfreeze variables as this is a throw-away SAT instance
+    // anyway.
+    for (int i = 0; i < frozen.size(); i++)
+        s.setFrozen(frozen[i], false);
+    printf(" ... clausifyInstance(): (SIMP) vars=%d, clauses=%d\n", s.nFreeVars(), s.nClauses());
 
     // Extract references to all clausified gates:
     lit_map.clear();
@@ -125,14 +262,19 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
     for (Gate g = t.main.firstGate(); g != gate_Undef; g = t.main.nextGate(g))
         if (inst.map.has(g) && inst.map[g] != sig_Undef){
             Lit l = cl.lookup(inst.map[g]);
-            if (l != lit_Undef)
+            if (l != lit_Undef && !s.isEliminated(var(l)))
                 lit_map[g] = l;
         }
+    // Also extract the constant true if referred to:
+    if (cl.lookup(sig_True) != lit_Undef)
+        lit_map[gate_True] = cl.lookup(sig_True);
 
-    // TODO: freeze vars and simplify.
-#else
-    printf("ERROR! 'clausifyInstance()' Unimplemented!\n");
-    exit(0);
+#ifndef NDEBUG
+    // Check that all inputs that exists in circuit instance, are also in clausified instance:
+    for (int i = 0; i < t.inps_main.size(); i++)
+        for (int j = 0; j < t.inps_main[i].size(); j++)
+            if (inst.map[t.inps_main[i][j]] != sig_Undef)
+                assert(lit_map[t.inps_main[i][j]] != lit_Undef);
 #endif
 }
 
@@ -149,17 +291,146 @@ void clausifyInit(const TipCirc& t,
 }
 
 
+Lit plugLit(Lit l, SimpSolver& to, vec<Lit>& lit_remap)
+{
+    if (lit_remap[var(l)] == lit_Undef)
+        lit_remap[var(l)] = mkLit(to.newVar());
+
+    return lit_remap[var(l)] ^ sign(l);
+}
+
+
+void plugClause(const Clause& c, SimpSolver& to, vec<Lit>& lit_remap)
+{
+    vec<Lit> clause;
+    for (int i = 0; i < c.size(); i++)
+        clause.push(plugLit(c[i], to, lit_remap));
+    to.addClause(clause);
+    //printf(" ... plugged-clause: "); printLits(clause); printf("\n");
+}
+
+
 void plugClausifiedInstance(const TipCirc& t, const SimpSolver& one, const GMap<Lit>& one_lit_map /* t.main => one */,
+                            const vec<Lit>& flop_front,
                             SimpSolver& s, GMap<Lit>& s_lit_map /* t.main => s */)
 {
-    printf("ERROR! 'plugClausifiedInstance()' Unimplemented!\n");
-    exit(0);
+    // printf(" >>> 'plugClausifiedInstance()':\n");
+    vec<Lit> lit_remap(one.nVars(), lit_Undef); // Store variable mapping between solvers ('one' => 's').
+
+    // Connect previous unrolling with new CNF instance:
+    for (int i = 0; i < t.flps.size(); i++){
+        Gate flop     = t.flps[i];
+        Lit  lit_prev = flop_front[i];
+        Lit  lit_one  = one_lit_map[flop];
+
+        if (!(lit_prev != lit_Undef || lit_one == lit_Undef || one.value(lit_one) != l_Undef)){
+            printf(" --- oops: flop=");
+            printGate(flop);
+            printf(", lit_one=%s%d, value(lit_one)=%c\n", 
+                   sign(lit_one)?"-":"", var(lit_one),
+                   one.value(lit_one)==l_Undef?'x':one.value(lit_one)==l_True?'1':'0'
+                   );
+        }
+        // NOTE: the assert below does not hold for flops that are equal to some other flop
+        // (non-leaders). Would be nice to fix the assertion, but that requires that the
+        // equivalence information is passed here or that less values are defined in the map
+        // 'one_lit_map'.
+        // assert(lit_prev != lit_Undef || lit_one == lit_Undef || one.value(lit_one) != l_Undef);
+
+        // If literal exists on both sides, connect them:
+        if (lit_prev != lit_Undef && lit_one != lit_Undef){
+            // printf(" +++ connect flop: "); printGate(flop); 
+            // printf(", lit_prev=%s%d, lit_one=%s%d\n", 
+            //        sign(lit_prev)?"-":"", var(lit_prev),
+            //        sign(lit_one)?"-":"", var(lit_one)
+            //        );
+            assert(lit_remap[var(lit_one)] == lit_Undef || lit_remap[var(lit_one)] == lit_prev ^ sign(lit_one));
+            lit_remap[var(lit_one)] = lit_prev ^ sign(lit_one);
+        }
+    }
+
+    // Copy all clauses:
+    for (ClauseIterator ci = one.clausesBegin(); ci != one.clausesEnd(); ++ci)
+        plugClause(*ci, s, lit_remap);
+
+    // Copy all assignments:
+    for (TrailIterator ti = one.trailBegin(); ti != one.trailEnd(); ++ti){
+        Lit l = plugLit(*ti, s, lit_remap);
+        s.addClause(l);
+        //printf(" ... plugged-unit: %s%d\n", sign(l)?"-":"", var(l)); 
+    }
+
+    // Copy all external references (flop-defs and properties):
+    for (int i = 0; i < t.flps.size(); i++){
+        Sig flop_def     = t.flps.next(t.flps[i]);
+        Lit flop_def_one = one_lit_map[gate(flop_def)] ^ sign(flop_def);
+        assert(flop_def_one != lit_Undef);
+        Lit flop_plugged = plugLit(flop_def_one, s, lit_remap);
+        // printf(" ... plugged-flop-def "); printGate(t.flps[i]);
+        // printf(" : %s%d\n", sign(flop_plugged)?"-":"", var(flop_plugged));
+    }
+    for (int i = 0; i < t.all_props.size(); i++){
+        Property p   = t.all_props[i];
+        Sig prop_t   = t.properties.propSig(p);
+        Lit prop_one = one_lit_map[gate(prop_t)] ^ sign(prop_t);
+        assert(prop_one != lit_Undef);
+        Lit prop_plugged = plugLit(prop_one, s, lit_remap);
+        // printf(" ... plugged-property %d", i);
+        // printf(" : %s%d\n", sign(prop_plugged)?"-":"", var(prop_plugged));
+    }    
+
+    // Check that all inputs that exists in circuit instance, are also in plugged instance: 
+    // NOTE: this may happen because CNF-level simplification reduced the CNF to a single constant
+    // (for the output property). Then the inputs may be anything, and we just assign them free
+    // variables.
+    for (int i = 0; i < t.inps_main.size(); i++)
+        for (int j = 0; j < t.inps_main[i].size(); j++){
+            Lit l = one_lit_map[t.inps_main[i][j]];
+            if (l != lit_Undef)
+                plugLit(l, s, lit_remap);
+        }
+
+    // Construct map from main to copied CNF instance:
+    s_lit_map.clear();
+    s_lit_map.growTo(t.main.lastGate(), lit_Undef);
+    for (Gate g = t.main.firstGate(); g != gate_Undef; g = t.main.nextGate(g)){
+        Lit one_lit = one_lit_map[g];
+        if (one_lit != lit_Undef){
+            Lit s_lit = lit_remap[var(one_lit)] ^ sign(one_lit);
+            // if (s_lit == lit_Undef){
+            //     printf("  oops: ");
+            //     printGate(g);
+            //     printf(" => one_lit=%s%d", sign(one_lit)?"-":"", var(one_lit));
+            //     printf(" => s_lit=%s%d\n", sign(s_lit)?"-":"", var(s_lit));
+            // }
+            assert(s_lit != lit_Undef);
+            s_lit_map[g] = s_lit;
+
+            // if (type(g) == gtype_Inp && !t.flps.isFlop(g)){
+            //     printf (" === input %d => (one) lit %s%d => (s) lit %s%d\n",
+            //             index(g), sign(one_lit)?"-":"", var(one_lit),
+            //             sign(s_lit)?"-":"", var(s_lit));
+            // }
+        }
+    }
+
+    // Also make a reference to the constant true:
+    if (one_lit_map[gate_True] != lit_Undef){
+        Lit lit_true = lit_Undef;
+        if (s.trailBegin() == s.trailEnd()){
+            // No previous assignments:
+            lit_true = mkLit(s.newVar());
+            s.addClause(lit_true);
+        }else
+            lit_true = *s.trailBegin();
+        s_lit_map[gate_True] = lit_true;
+    }
 }
 
 
 void extractEquivsFromFront(const TipCirc& t, const vec<Sig>& front, Equivs& eqs)
 {
-    printf(" ... Called 'extractEquivsFromFront()':\n");
+    // printf(" >>> 'extractEquivsFromFront()':\n");
     eqs.clear();
 
     vec<FrontPair> front_pairs;
@@ -189,7 +460,8 @@ void extractEquivsFromFront(const TipCirc& t, const vec<Sig>& front, Equivs& eqs
     }
 
     // Print resulting equivalences:
-    for (int i = 0; i < eqs.size(); i++){
+#if 0
+    for (uint32_t i = 0; i < eqs.size(); i++){
         printf(" ... class %d: ", i);
         for (int j = 0; j < eqs[i].size(); j++){
             printSig(eqs[i][j]);
@@ -197,6 +469,15 @@ void extractEquivsFromFront(const TipCirc& t, const vec<Sig>& front, Equivs& eqs
         }
         printf("\n");
     }
+#else
+    uint32_t n_consts = 0;
+    for (uint32_t i = 0; i < eqs.size(); i++)
+        if (eqs[i][0] == sig_True){
+            n_consts = eqs[i].size()-1;
+            break; }
+
+    printf(" ... front equivalences: #const=%d, #classes=%d\n", n_consts, eqs.size());
+#endif
 }
 
 
@@ -206,6 +487,8 @@ void extractEquivsFromInstance(const TipCirc& t, CircInstance& inst, Equivs& eqs
     for (int i = 0; i < t.flps.size(); i++){
         Sig flop_next_t = t.flps.next(t.flps[i]);
         Sig flop_inst   = inst.map[gate(flop_next_t)] ^ sign(flop_next_t);
+        // printf(" >>> flop: "); printGate(t.flps[i]); 
+        // printf(" => "); printSig(flop_next_t); printf(" => "); printSig(flop_inst); printf("\n");
         front.push(flop_inst);
     }
     extractEquivsFromFront(t, front, eqs);
@@ -221,7 +504,7 @@ void extractEquivsFromInit(const TipCirc& t, Equivs& eqs)
 }
 
 
-void extractEquivsFromSolver(const TipCirc& t, SimpSolver& s, Equivs& eqs)
+void extractEquivsFromSolver(const TipCirc& /*t*/, SimpSolver& /*s*/, Equivs& /*eqs*/)
 {
     printf("ERROR! 'extractEquivsFromSolver()' Unimplemented!\n");
     exit(0);
@@ -243,6 +526,10 @@ class SimpUnroller {
 public:
     SimpUnroller(const TipCirc& t, vec<LIFrame>& ui, SimpSolver& solver);
     void operator()(GMap<Lit>& cl_map);
+
+    void extractTrace(const SimpSolver& s, vec<vec<lbool> >& tr);
+
+    void printFront();
 };
 
 
@@ -274,6 +561,7 @@ void SimpUnroller::initialize()
         if (front_eqs.leader(flop) == flop){
             Sig flop_init = tip.flps.init(tip.flps[i]);
             Lit l         = cl_map[gate(flop_init)] ^ sign(flop_init);
+            assert(l != lit_Undef);
             solver.setFrozen(var(l), true);
             flop_front.push(l);
         }else
@@ -287,14 +575,21 @@ void SimpUnroller::operator()(GMap<Lit>& lit_map){
     SimpSolver   inst_solver;
     GMap<Lit>    inst_cl_map;
 
+    // printf(" +++ Unrolling ...\n");
+    // printFront();
+
     instantiateCirc       (tip, front_eqs, inst);
     clausifyInstance      (tip, inst, inst_solver, inst_cl_map);
-    plugClausifiedInstance(tip, inst_solver, inst_cl_map, solver, lit_map);
+    plugClausifiedInstance(tip, inst_solver, inst_cl_map, flop_front, solver, lit_map);
 
     // Unfreeze previous flop-front-variables:
     for (int i = 0; i < flop_front.size(); i++)
-        if (flop_front[i] != lit_Undef)
+        if (flop_front[i] != lit_Undef){
+            assert(var(flop_front[i]) >= 0);
+            assert(var(flop_front[i]) < solver.nVars());
+            assert(!solver.isEliminated(var(flop_front[i])));
             solver.setFrozen(var(flop_front[i]), false);
+        }
 
     // TODO investigate alternatives here ...
     extractEquivsFromInstance(tip, inst, front_eqs);
@@ -303,8 +598,8 @@ void SimpUnroller::operator()(GMap<Lit>& lit_map){
     for (int i = 0; i < tip.inps_main.size(); i++){
         unroll_inps.push();
         for (int j = 0; j < tip.inps_main[i].size(); j++){
-            Lit l = inst_cl_map[tip.inps_main[i][j]];
-            assert(!sign(l));
+            Lit l = lit_map[tip.inps_main[i][j]];
+            assert(l == lit_Undef || !sign(l));
             unroll_inps.last().push(var(l));
         }
     }
@@ -314,7 +609,11 @@ void SimpUnroller::operator()(GMap<Lit>& lit_map){
         Sig flop = mkSig(tip.flps[i]);
         if (front_eqs.leader(flop) == flop){
             Sig flop_next = tip.flps.next(tip.flps[i]);
-            Lit l         = inst_cl_map[gate(flop_next)] ^ sign(flop_next);
+            Lit l         = lit_map[gate(flop_next)] ^ sign(flop_next);
+            assert(l != lit_Undef);
+            assert(var(l) >= 0);
+            assert(var(l) < solver.nVars());
+            assert(!solver.isEliminated(var(l)));
             solver.setFrozen(var(l), true);
             flop_front[i] = l;
         }else
@@ -323,7 +622,47 @@ void SimpUnroller::operator()(GMap<Lit>& lit_map){
 }
 
 
+void SimpUnroller::extractTrace(const SimpSolver& s, vec<vec<lbool> >& tr)
+{
+    for (int i = 0; i < unroll_inps.size(); i++){
+        tr.push();
+        for (int j = 0; j < unroll_inps[i].size(); j++)
+            if (unroll_inps[i][j] != var_Undef)
+                tr.last().push(s.modelValue(unroll_inps[i][j]));
+            else
+                tr.last().push(l_Undef);
+    }            
 }
+
+
+void SimpUnroller::printFront()
+{
+    // front_eqs
+    // flop_front
+    printf(" <<< Current Equivalences:\n");
+    for (uint32_t i = 0; i < front_eqs.size(); i++){
+        printf(" ... class %d: ", i);
+        for (int j = 0; j < front_eqs[i].size(); j++){
+            printSig(front_eqs[i][j]);
+            printf(" ");
+        }
+        printf("\n");
+    }
+    printf(" <<< Current Front:\n");
+    for (int i = 0; i < flop_front.size(); i++){
+        Gate g = tip.flps[i];
+        Lit  l = flop_front[i];
+        printf(" ... flop "); printGate(g); 
+        if (l == lit_Undef)
+            printf(" = x");
+        else
+            printf(" = %s%d", sign(l)?"-":"", var(l)); 
+        printf("\n");
+    }
+}
+
+}
+
 
 //=================================================================================================
 // Implementation of Simplifying BMC:
@@ -336,6 +675,8 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
     SimpUnroller           unroll(tip, ui, s);  // Unroller-helper object.
     GMap<Lit>              cl_map;              // Reusable map from 't.main' to literals in 's'.
     vec<Var>               frozen_vars;         // Reusable list of frozen variables.
+
+    //tip.printCirc();
 
     //s.verbosity = 1;
     for (uint32_t i = 0; i < stop_cycle; i++){
@@ -353,6 +694,7 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
                 continue;
             Sig psig = tip.properties.propSig(p);
             Lit l    = cl_map[gate(psig)] ^ sign(psig);
+            assert(l != lit_Undef);
             s.setFrozen(var(l), true);
             frozen_vars.push(var(l));
         }
@@ -369,12 +711,17 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             
             Sig psig = tip.properties.propSig(p);
             Lit plit = cl_map[gate(psig)] ^ sign(psig);
+            assert(plit != lit_Undef);
             printf(" --- cycle=%3d, vars=%8.3g, clauses=%8.3g\n", i, (double)s.nFreeVars(), (double)s.nClauses());
 
-            //printf(" ... testing property %d\n", p);
+            //printf(" ... testing property %d: %s%d=%c\n", p, sign(plit)?"-":"", var(plit),
+            // s.value(plit)==l_Undef?'x':s.value(plit)==l_True?'1':'0');
             if (s.solve(~plit, false, false)){
                 //printf (" ... property falsified.\n");
-                tip.properties.setPropFalsified(p, /* FIXME */ trace_Undef);
+                Trace tid = tip.traces.newTrace();
+                unroll.extractTrace(s, tip.traces.getFrames(tid));
+                tip.properties.setPropFalsified(p, tid);
+                //tip.printTrace(tid);
             }else{
                 unresolved_safety++;
                 //printf (" ... property true.\n");
