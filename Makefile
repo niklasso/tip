@@ -152,10 +152,14 @@ $(BUILD_DIR)/release/bin/$(TIP) $(BUILD_DIR)/debug/bin/$(TIP) $(BUILD_DIR)/profi
 	$(VERB) $(AR) -rcs $@ $^
 
 ## Shared Library rule
-$(BUILD_DIR)/dynamic/lib/$(TIP_DLIB).$(SOMAJOR).$(SOMINOR)$(SORELEASE):
+$(BUILD_DIR)/dynamic/lib/$(TIP_DLIB).$(SOMAJOR).$(SOMINOR)$(SORELEASE)\
+ $(BUILD_DIR)/dynamic/lib/$(TIP_DLIB).$(SOMAJOR)\
+ $(BUILD_DIR)/dynamic/lib/$(TIP_DLIB):
 	$(ECHO) echo Linking Shared Library: $@
 	$(VERB) mkdir -p $(dir $@)
 	$(VERB) $(CXX) $(TIP_LDFLAGS) -o $@ -shared -Wl,-soname,$(TIP_DLIB).$(SOMAJOR) $^
+	$(VERB) ln -sf $(TIP_DLIB).$(SOMAJOR).$(SOMINOR)$(SORELEASE) $(BUILD_DIR)/dynamic/lib/$(TIP_DLIB).$(SOMAJOR)
+	$(VERB) ln -sf $(TIP_DLIB).$(SOMAJOR) $(BUILD_DIR)/dynamic/lib/$(TIP_DLIB)
 
 install:	install-headers install-lib install-bin
 
