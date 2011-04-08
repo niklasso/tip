@@ -738,6 +738,7 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             break;
     }
     printf(" --- done, vars=%8.3g, clauses=%8.3g, conflicts=%8.3g\n", (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
+    s.printStats();
 }
 
 };
