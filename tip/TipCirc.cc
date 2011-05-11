@@ -52,21 +52,31 @@ namespace Tip {
     }
 
 
-    void TipCirc::printTrace(Trace tid)
+    void TipCirc::printTrace(FILE* out, Trace tid)
     {
         const vec<vec<lbool> >& tr = traces.getFrames(tid);
         for (int i = 0; i < tr.size(); i++){
             for (int j = 0; j < tr[i].size(); j++)
                 if (tr[i][j] == l_Undef)
-                    printf("x");
+                    fprintf(out, "x");
                 else if (tr[i][j] == l_False)
-                    printf("0");
+                    fprintf(out, "0");
                 else{
                     assert(tr[i][j] == l_True);
-                    printf("1");
+                    fprintf(out, "1");
                 }
-            printf("\n");
+            fprintf(out, "\n");
         }
+    }
+
+    void TipCirc::printResults(FILE* out)
+    {
+        // NOTE: Currently only prints the first counter-example!
+        for (int i = 0; i < all_props.size(); i++)
+            if (properties.propStatus(all_props[i]) == pstat_Falsifiable){
+                printTrace(out, all_props[i]);
+                break;
+            }
     }
 
     void TipCirc::printCirc()

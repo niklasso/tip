@@ -39,5 +39,12 @@ int main(int argc, char** argv)
     tc.readAiger(argv[1]);
     tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
 
+    if (argc == 3){
+        FILE* res = fopen(argv[2], "w");
+        if (!res) printf("ERROR! Failed to open results file: %s\n", argv[2]), exit(1);
+        tc.printResults(res);
+        fclose(res);
+    }
+
     exit(0);
 }

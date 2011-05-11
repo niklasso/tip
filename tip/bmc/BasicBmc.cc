@@ -32,7 +32,6 @@ using namespace Minisat;
 
 class Unroller {
     const TipCirc& tip;
-    vec<IFrame>&   unroll_inps;
     Circ&          unroll_circ;
     vec<Sig>       flop_front;
 
@@ -40,19 +39,34 @@ class Unroller {
 public:
     Unroller(const TipCirc& t, vec<IFrame>& ui, Circ& uc);
     void operator()(GMap<Sig>& unroll_map);
+
+    vec<IFrame>&   unroll_inps;
 };
 
 
 Unroller::Unroller(const TipCirc& t, vec<IFrame>& ui, Circ& uc) 
-    : tip(t), unroll_inps(ui), unroll_circ(uc){ initialize(); }
+    : tip(t), unroll_circ(uc), unroll_inps(ui){ initialize(); }
 
 
 void Unroller::initialize()
 {
     GMap<Sig> init_map;
     copyCirc(tip.init, unroll_circ, init_map);
+
+#if 0    
     copy(tip.inps_init, unroll_inps);
     map (init_map, unroll_inps);
+#else
+    unroll_inps.push();
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd() ; ++iit){
+        Gate inp = *iit;
+        assert(!sign(init_map[*iit]));
+        assert(tip.init.number(inp) != UINT32_MAX);
+        unroll_inps.last().growTo(tip.init.number(inp)+1, gate_Undef);
+        unroll_inps.last()[tip.init.number(inp)] = gate(init_map[*iit]);
+    }
+#endif
+
     for (int i = 0; i < tip.flps.size(); i++)
         flop_front.push(tip.flps.init(tip.flps[i]));
     map(init_map, flop_front);
@@ -66,10 +80,22 @@ void Unroller::operator()(GMap<Sig>& unroll_map){
         unroll_map[tip.flps[i]] = flop_front[i];
     copyCirc(tip.main, unroll_circ, unroll_map);
 
+
+#if 0    
     vec<IFrame> new_inps; 
     copy(tip.inps_main, new_inps);
     map(unroll_map, new_inps);
     append(new_inps, unroll_inps);
+#else
+    unroll_inps.push();
+    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
+        Gate inp = *iit;
+        assert(!sign(unroll_map[*iit]));
+        assert(tip.main.number(inp) != UINT32_MAX);
+        unroll_inps.last().growTo(tip.main.number(inp)+1, gate_Undef);
+        unroll_inps.last()[tip.main.number(inp)] = gate(unroll_map[*iit]);
+    }
+#endif
 
     for (int i = 0; i < tip.flps.size(); i++){
         Gate flop     = tip.flps[i];
@@ -116,8 +142,16 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 
             //printf(" ... testing property %d\n", p);
             if (s.solve(~plit)){
+                // Property falsified, create and extract trace:
+                Trace             cex    = tip.traces.newTrace();
+                vec<vec<lbool> >& frames = tip.traces.getFrames(cex);
+                for (int k = 0; k < unroll.unroll_inps.size(); k++){
+                    frames.push();
+                    for (int l = 0; l < unroll.unroll_inps[k].size(); l++)
+                        frames.last().push(cl.modelValue(unroll.unroll_inps[k][l]));
+                }
                 //printf (" ... property falsified.\n");
-                tip.properties.setPropFalsified(p, /* FIXME */ trace_Undef);
+                tip.properties.setPropFalsified(p, cex);
             }else{
                 unresolved_safety++;
                 //printf (" ... property true.\n");

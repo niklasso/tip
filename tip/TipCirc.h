@@ -68,7 +68,7 @@ class PropertySet {
 public:
     Property   newProperty      (Sig s, PropType t)    { prop_set.push(PropData(s,t)); return prop_set.size()-1; }
     void       setPropTrue      (Property p)           { assert(p < (Property)prop_set.size()); prop_set[p].stat = pstat_True; }
-    void       setPropFalsified (Property p, Trace cex){ assert(p < (Property)prop_set.size()); prop_set[p].stat = pstat_True; prop_set[p].cex = cex; }
+    void       setPropFalsified (Property p, Trace cex){ assert(p < (Property)prop_set.size()); prop_set[p].stat = pstat_Falsifiable; prop_set[p].cex = cex; }
     Sig        propSig          (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].sig; }
     PropType   propType         (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].type; }
     PropStatus propStatus       (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].stat; }
@@ -100,7 +100,8 @@ public:
     void bmc           (uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver = bmc_Basic);
 
     // Helpers:
-    void printTrace    (Trace t);
+    void printTrace    (FILE* out, Trace t);
+    void printResults  (FILE* out);
     void printCirc     ();
 
     //TODO: hide data somehow?
