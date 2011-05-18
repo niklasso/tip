@@ -139,7 +139,6 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
                       SimpSolver& s, GMap<Lit>& lit_map /* t.main => s */)
 {
     Clausifyer<SimpSolver> cl(inst.circ, s);
-    vec<Var>               frozen;
 
     // Clausify & freeze flop-definitions:
     for (int i = 0; i < t.flps.size(); i++){
@@ -148,8 +147,7 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
         assert(flop_next_inst != sig_Undef);
         Lit l                      = cl.clausify(flop_next_inst);
         // printf(" ... froze (flop-def) %d\n", var(l));
-        s.setFrozen(var(l), true);
-        frozen.push(var(l));
+        s.freezeVar(var(l));
     }
 
     // Clausify & freeze properties:
@@ -160,8 +158,7 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
         assert(prop_inst != sig_Undef);
         Lit l                 = cl.clausify(prop_inst);
         // printf(" ... froze (property) %d\n", var(l));
-        s.setFrozen(var(l), true);
-        frozen.push(var(l));
+        s.freezeVar(var(l));
     }
 
     // Freeze all (used) inputs:
@@ -174,8 +171,7 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
                 // printf(" ... froze (input) "); printGate(inp);
                 // printf(" => "); printSig(inp_inst);
                 // printf(" => %s%d\n", sign(l)?"-":"", var(l));
-                s.setFrozen(var(l), true);
-                frozen.push(var(l));
+                s.freezeVar(var(l));
             }
         }
     }
@@ -190,8 +186,7 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
                 // printf(" ... froze (flop) "); printGate(flop);
                 // printf(" => "); printSig(flop_inst);
                 // printf(" => %s%d\n", sign(l)?"-":"", var(l));
-                s.setFrozen(var(l), true);
-                frozen.push(var(l));
+                s.freezeVar(var(l));
             }
         }
     }    
@@ -251,8 +246,7 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
 
     // TODO: not sure if it matters to unfreeze variables as this is a throw-away SAT instance
     // anyway.
-    for (int i = 0; i < frozen.size(); i++)
-        s.setFrozen(frozen[i], false);
+    s.thaw();
     printf(" ... clausifyInstance(): (SIMP) vars=%d, clauses=%d\n", s.nFreeVars(), s.nClauses());
 
     // Extract references to all clausified gates:
@@ -561,7 +555,7 @@ void SimpUnroller::initialize()
             Sig flop_init = tip.flps.init(tip.flps[i]);
             Lit l         = cl_map[gate(flop_init)] ^ sign(flop_init);
             assert(l != lit_Undef);
-            solver.setFrozen(var(l), true);
+            solver.freezeVar(var(l));
             flop_front.push(l);
         }else
             flop_front.push(lit_Undef);
@@ -582,13 +576,13 @@ void SimpUnroller::operator()(GMap<Lit>& lit_map){
     plugClausifiedInstance(tip, inst_solver, inst_cl_map, flop_front, solver, lit_map);
 
     // Unfreeze previous flop-front-variables:
-    for (int i = 0; i < flop_front.size(); i++)
-        if (flop_front[i] != lit_Undef){
-            assert(var(flop_front[i]) >= 0);
-            assert(var(flop_front[i]) < solver.nVars());
-            assert(!solver.isEliminated(var(flop_front[i])));
-            solver.setFrozen(var(flop_front[i]), false);
-        }
+    // for (int i = 0; i < flop_front.size(); i++)
+    //     if (flop_front[i] != lit_Undef){
+    //         assert(var(flop_front[i]) >= 0);
+    //         assert(var(flop_front[i]) < solver.nVars());
+    //         assert(!solver.isEliminated(var(flop_front[i])));
+    //         solver.setFrozen(var(flop_front[i]), false);
+    //     }
 
     // TODO investigate alternatives here ...
     extractEquivsFromInstance(tip, inst, front_eqs);
@@ -620,7 +614,7 @@ void SimpUnroller::operator()(GMap<Lit>& lit_map){
             assert(var(l) >= 0);
             assert(var(l) < solver.nVars());
             assert(!solver.isEliminated(var(l)));
-            solver.setFrozen(var(l), true);
+            solver.freezeVar(var(l));
             flop_front[i] = l;
         }else
             flop_front[i] = lit_Undef;
@@ -680,7 +674,6 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
     SimpSolver             s;                   // SAT-solver.
     SimpUnroller           unroll(tip, ui, s);  // Unroller-helper object.
     GMap<Lit>              cl_map;              // Reusable map from 't.main' to literals in 's'.
-    vec<Var>               frozen_vars;         // Reusable list of frozen variables.
 
     //tip.printCirc();
 
@@ -693,7 +686,7 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             continue;
 
         // Clausify and freeze all properties:
-        frozen_vars.clear();
+        //frozen_vars.clear();
         for (int j = 0; j < tip.all_props.size(); j++){
             Property p = tip.all_props[j];
             if (tip.properties.propType(p) != ptype_Safety || tip.properties.propStatus(p) != pstat_Unknown)
@@ -701,8 +694,7 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             Sig psig = tip.properties.propSig(p);
             Lit l    = cl_map[gate(psig)] ^ sign(psig);
             assert(l != lit_Undef);
-            s.setFrozen(var(l), true);
-            frozen_vars.push(var(l));
+            s.freezeVar(var(l));
         }
 
         // Do CNF-level simplification:
@@ -735,9 +727,8 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             }
         }
 
-        // Unfreeze all properties:
-        for (int j = 0; j < frozen_vars.size(); j++)
-            s.setFrozen(frozen_vars[j], false);
+        // Unfreeze everything:
+        s.thaw();
 
         // Terminate if all safety properties resolved:
         if (unresolved_safety == 0)
