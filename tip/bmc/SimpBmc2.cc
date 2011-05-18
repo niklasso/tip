@@ -165,21 +165,20 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
     }
 
     // Freeze all (used) inputs:
-    for (int i = 0; i < t.inps_main.size(); i++)
-        for (int j = 0; j < t.inps_main[i].size(); j++){
-            Gate inp      = t.inps_main[i][j];
-            Sig  inp_inst = inst.map[inp];
-            if (inp_inst != sig_Undef){
-                Lit l = cl.lookup(inp_inst);
-                if (l != lit_Undef){
-                    // printf(" ... froze (input) "); printGate(inp);
-                    // printf(" => "); printSig(inp_inst);
-                    // printf(" => %s%d\n", sign(l)?"-":"", var(l));
-                    s.setFrozen(var(l), true);
-                    frozen.push(var(l));
-                }
+    for (TipCirc::InpIt iit = t.inpBegin(); iit != t.inpEnd(); ++iit){
+        Gate inp      = *iit;
+        Sig  inp_inst = inst.map[inp];
+        if (inp_inst != sig_Undef){
+            Lit l = cl.lookup(inp_inst);
+            if (l != lit_Undef){
+                // printf(" ... froze (input) "); printGate(inp);
+                // printf(" => "); printSig(inp_inst);
+                // printf(" => %s%d\n", sign(l)?"-":"", var(l));
+                s.setFrozen(var(l), true);
+                frozen.push(var(l));
             }
         }
+    }
 
     // Freeze all (used) flops:
     for (int i = 0; i < t.flps.size(); i++){
@@ -271,10 +270,9 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
 
 #ifndef NDEBUG
     // Check that all inputs that exists in circuit instance, are also in clausified instance:
-    for (int i = 0; i < t.inps_main.size(); i++)
-        for (int j = 0; j < t.inps_main[i].size(); j++)
-            if (inst.map[t.inps_main[i][j]] != sig_Undef)
-                assert(lit_map[t.inps_main[i][j]] != lit_Undef);
+    for (TipCirc::InpIt iit = t.inpBegin(); iit != t.inpEnd(); ++iit)
+            if (inst.map[*iit] != sig_Undef)
+                assert(lit_map[*iit] != lit_Undef);
 #endif
 }
 
@@ -383,9 +381,8 @@ void plugClausifiedInstance(const TipCirc& t, const SimpSolver& one, const GMap<
     // NOTE: this may happen because CNF-level simplification reduced the CNF to a single constant
     // (for the output property). Then the inputs may be anything, and we just assign them free
     // variables.
-    for (int i = 0; i < t.inps_main.size(); i++)
-        for (int j = 0; j < t.inps_main[i].size(); j++){
-            Lit l = one_lit_map[t.inps_main[i][j]];
+    for (TipCirc::InpIt iit = t.inpBegin(); iit != t.inpEnd(); ++iit){
+            Lit l = one_lit_map[*iit];
             if (l != lit_Undef)
                 plugLit(l, s, lit_remap);
         }
@@ -546,13 +543,15 @@ void SimpUnroller::initialize()
     extractEquivsFromInit(tip, front_eqs);
         
     // Extract initial input-variables from solver:
-    for (int i = 0; i < tip.inps_init.size(); i++){
-        unroll_inps.push();
-        for (int j = 0; j < tip.inps_init[i].size(); j++){
-            Lit l = cl_map[tip.inps_init[i][j]];
-            assert(!sign(l));
-            unroll_inps.last().push(var(l));
-        }
+    unroll_inps.push();
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit){
+        Gate     inp = *iit;
+        uint32_t num = tip.init.number(inp);
+        Lit      l   = cl_map[inp];
+        assert(!sign(l));
+        assert(num != UINT32_MAX);
+        unroll_inps.last().growTo(num+1, var_Undef);
+        unroll_inps.last()[num] = var(l);
     }
 
     // Extract & freeze initial flop-front-variables from solver:
@@ -595,13 +594,20 @@ void SimpUnroller::operator()(GMap<Lit>& lit_map){
     extractEquivsFromInstance(tip, inst, front_eqs);
 
     // Extract input-variables from solver:
-    for (int i = 0; i < tip.inps_main.size(); i++){
-        unroll_inps.push();
-        for (int j = 0; j < tip.inps_main[i].size(); j++){
-            Lit l = lit_map[tip.inps_main[i][j]];
-            assert(l == lit_Undef || !sign(l));
-            unroll_inps.last().push(var(l));
-        }
+    unroll_inps.push();
+    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
+        Gate     inp = *iit;
+        uint32_t num = tip.main.number(inp);
+        Lit      l   = lit_map[inp];
+
+        // TODO: investigate this assert.
+        // assert(l == lit_Undef || !sign(l));
+        assert(l != lit_Undef);
+
+        assert(!sign(l));
+        assert(num != UINT32_MAX);
+        unroll_inps.last().growTo(num+1, var_Undef);
+        unroll_inps.last()[num] = var(l);
     }
 
     // Extract & freeze flop-front-variables from solver:
