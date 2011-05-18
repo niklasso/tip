@@ -53,10 +53,6 @@ void Unroller::initialize()
     GMap<Sig> init_map;
     copyCirc(tip.init, unroll_circ, init_map);
 
-#if 0    
-    copy(tip.inps_init, unroll_inps);
-    map (init_map, unroll_inps);
-#else
     unroll_inps.push();
     for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd() ; ++iit){
         Gate inp = *iit;
@@ -65,7 +61,6 @@ void Unroller::initialize()
         unroll_inps.last().growTo(tip.init.number(inp)+1, gate_Undef);
         unroll_inps.last()[tip.init.number(inp)] = gate(init_map[*iit]);
     }
-#endif
 
     for (int i = 0; i < tip.flps.size(); i++)
         flop_front.push(tip.flps.init(tip.flps[i]));
@@ -80,13 +75,6 @@ void Unroller::operator()(GMap<Sig>& unroll_map){
         unroll_map[tip.flps[i]] = flop_front[i];
     copyCirc(tip.main, unroll_circ, unroll_map);
 
-
-#if 0    
-    vec<IFrame> new_inps; 
-    copy(tip.inps_main, new_inps);
-    map(unroll_map, new_inps);
-    append(new_inps, unroll_inps);
-#else
     unroll_inps.push();
     for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
         Gate inp = *iit;
@@ -95,7 +83,6 @@ void Unroller::operator()(GMap<Sig>& unroll_map){
         unroll_inps.last().growTo(tip.main.number(inp)+1, gate_Undef);
         unroll_inps.last()[tip.main.number(inp)] = gate(unroll_map[*iit]);
     }
-#endif
 
     for (int i = 0; i < tip.flps.size(); i++){
         Gate flop     = tip.flps[i];
