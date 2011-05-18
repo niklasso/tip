@@ -34,7 +34,6 @@ typedef vec<Var> LIFrame;
 
 class SimpUnroller {
     const TipCirc& tip;
-    vec<LIFrame>&  unroll_inps;
     SimpSolver&    solver;
     vec<Lit>       flop_front;
 
@@ -42,36 +41,76 @@ class SimpUnroller {
 public:
     SimpUnroller(const TipCirc& t, vec<LIFrame>& ui, SimpSolver& solver);
     void operator()(Clausifyer<SimpSolver>& unroll_cl);
+
+    vec<LIFrame>&  unroll_inps;
 };
 
 
 SimpUnroller::SimpUnroller(const TipCirc& t, vec<LIFrame>& ui, SimpSolver& s) 
-    : tip(t), unroll_inps(ui), solver(s) { initialize(); }
+    : tip(t), solver(s), unroll_inps(ui) { initialize(); }
 
 
 void SimpUnroller::initialize()
 {
+    // Clausify initial circuit:
     Clausifyer<SimpSolver> cl(tip.init, solver);
     for (int i = 0; i < tip.flps.size(); i++){
         Lit l = cl.clausify(tip.flps.init(tip.flps[i]));
-        solver.setFrozen(var(l), true);
+        // solver.setFrozen(var(l), true);
+        solver.freezeVar(var(l));
         flop_front.push(l);
+    }
+
+    // Extract input variables:
+    unroll_inps.push();
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd() ; ++iit){
+        Gate     inp = *iit;
+        uint32_t num = tip.init.number(inp);
+        Lit      l   = cl.lookup(inp);
+        assert(!sign(l));
+        assert(num != UINT32_MAX);
+        unroll_inps.last().growTo(num+1, var_Undef);
+        unroll_inps.last()[num] = var(l);
     }
 }
 
 
 void SimpUnroller::operator()(Clausifyer<SimpSolver>& unroll_cl){
     unroll_cl.clear();
+    // Bind old flop outputs to new flop inputs:
     for (int i = 0; i < tip.flps.size(); i++){
         assert(!solver.isEliminated(var(flop_front[i])));
-        solver.setFrozen(var(flop_front[i]), false);
+        //solver.setFrozen(var(flop_front[i]), false);
         unroll_cl.clausifyAs(tip.flps[i], flop_front[i]);
     }
 
+    // Clausify flop definitions:
     for (int i = 0; i < tip.flps.size(); i++){
         Lit l = unroll_cl.clausify(tip.flps.next(tip.flps[i]));
-        solver.setFrozen(var(l), true);
+        //solver.setFrozen(var(l), true);
+        solver.freezeVar(var(l));
         flop_front[i] = l;
+    }
+
+    // Clausify properties:
+    for (int j = 0; j < tip.all_props.size(); j++){
+        Property p = tip.all_props[j];
+        if (tip.properties.propType(p) != ptype_Safety || tip.properties.propStatus(p) != pstat_Unknown)
+            continue;
+        Lit l = unroll_cl.clausify(tip.properties.propSig(p));
+        solver.freezeVar(var(l));
+    }
+
+    // Extract input variables:
+    unroll_inps.push();
+    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
+        Gate     inp = *iit;
+        uint32_t num = tip.main.number(inp);
+        Lit      l   = unroll_cl.lookup(inp);
+        assert(!sign(l));
+        assert(num != UINT32_MAX);
+        unroll_inps.last().growTo(num+1, var_Undef);
+        unroll_inps.last()[num] = var(l);
     }
 }
 
@@ -96,17 +135,6 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
         if (i < begin_cycle)
             continue;
 
-        // Clausify and freeze all properties:
-        frozen_vars.clear();
-        for (int j = 0; j < tip.all_props.size(); j++){
-            Property p = tip.all_props[j];
-            if (tip.properties.propType(p) != ptype_Safety || tip.properties.propStatus(p) != pstat_Unknown)
-                continue;
-            Lit l = ucl.clausify(tip.properties.propSig(p));
-            s.setFrozen(var(l), true);
-            frozen_vars.push(var(l));
-        }
-
         // Do CNF-level simplification:
         s.eliminate();
 
@@ -122,8 +150,19 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 
             //printf(" ... testing property %d\n", p);
             if (s.solve(~plit, false, false)){
-                //printf (" ... property falsified.\n");
-                tip.properties.setPropFalsified(p, /* FIXME */ trace_Undef);
+                // Property falsified, create and extract trace:
+                Trace             cex    = tip.traces.newTrace();
+                vec<vec<lbool> >& frames = tip.traces.getFrames(cex);
+                for (int k = 0; k < unroll.unroll_inps.size(); k++){
+                    frames.push();
+                    for (int l = 0; l < unroll.unroll_inps[k].size(); l++)
+                        if (unroll.unroll_inps[k][l] != var_Undef)
+                            frames.last().push(s.modelValue(unroll.unroll_inps[k][l]));
+                        else
+                            frames.last().push(l_Undef);
+                }
+                printf (" ... property falsified, created trace = %d of length %d.\n", cex, frames.size());
+                tip.properties.setPropFalsified(p, cex);
             }else{
                 unresolved_safety++;
                 //printf (" ... property true.\n");
@@ -131,9 +170,8 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             }
         }
 
-        // Unfreeze all properties:
-        for (int j = 0; j < frozen_vars.size(); j++)
-            s.setFrozen(frozen_vars[j], false);
+        // Thaw all frozen variables:
+        s.thaw();
 
         // Terminate if all safety properties resolved:
         if (unresolved_safety == 0)
