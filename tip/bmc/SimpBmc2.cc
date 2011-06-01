@@ -30,6 +30,15 @@ namespace Tip {
 
 using namespace Minisat;
 
+//=================================================================================================
+// Options:
+
+
+static const char* _cat = "SIMPBMC2";
+
+static IntOption     opt_local_grow  (_cat, "local-grow",  "Use grow value for local preprocessing in SimpBmc2", 0, IntRange(0, INT32_MAX));
+static BoolOption    opt_local_asymm (_cat, "local-asymm", "Use local asymmetric brancing in SimpBmc2", false);
+
 namespace {
 
 //=================================================================================================
@@ -243,6 +252,8 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
     int num_cls_before = s.nClauses();
 
     // Simplify & unfreeze variables:
+    s.grow      = opt_local_grow;
+    s.use_asymm = opt_local_asymm;
     s.eliminate();
 
     // TODO: not sure if it matters to unfreeze variables as this is a throw-away SAT instance
