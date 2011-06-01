@@ -18,6 +18,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include "minisat/core/Solver.h"
+#include "minisat/utils/System.h"
 #include "mcl/CircPrelude.h"
 #include "mcl/Clausify.h"
 #include "tip/bmc/Bmc.h"
@@ -98,6 +99,8 @@ void Unroller::operator()(GMap<Sig>& unroll_map){
 
 void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 {
+    double             time_before = cpuTime();
+    double             solve_time  = 0;
     Circ               uc;                  // Unrolled circuit.
     vec<IFrame>        ui;                  // Unrolled set of input frames.
     Unroller           unroll(tip, ui, uc); // Unroller-helper object.
@@ -108,7 +111,6 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
     //s.verbosity = 1;
     for (uint32_t i = 0; i < stop_cycle; i++){
         unroll(umap);
-        //printf(" ... unrolling cycle %d\n", i);
 
         if (i < begin_cycle)
             continue;
@@ -125,10 +127,22 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             assert(psig_unroll != sig_Undef);
             Lit plit = cl.clausify(psig_unroll);
 
-            printf(" --- cycle=%3d, vars=%8.3g, clauses=%8.3g, conflicts=%8.3g\n", i, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
+            double total_time = cpuTime() - time_before;
+            if (tip.verbosity >= 1){
+                printf(" --- k=%3d, vrs=%8.3g, cls=%8.3g, con=%8.3g",
+                       i, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
+                if (tip.verbosity >= 2)
+                    printf(", time(solve=%6.1f s, total=%6.1f s)\n",
+                           solve_time, total_time);
+                else
+                    printf("\n");
+            }
 
-            //printf(" ... testing property %d\n", p);
-            if (s.solve(~plit)){
+            double solve_time_before = cpuTime();
+            bool ret = s.solve(~plit);
+            solve_time += cpuTime() - solve_time_before;
+
+            if (ret){
                 // Property falsified, create and extract trace:
                 Trace             cex    = tip.traces.newTrace();
                 vec<vec<lbool> >& frames = tip.traces.getFrames(cex);
@@ -137,11 +151,9 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
                     for (int l = 0; l < unroll.unroll_inps[k].size(); l++)
                         frames.last().push(cl.modelValue(unroll.unroll_inps[k][l]));
                 }
-                //printf (" ... property falsified.\n");
                 tip.properties.setPropFalsified(p, cex);
             }else{
                 unresolved_safety++;
-                //printf (" ... property true.\n");
             }
         }
 
@@ -149,8 +161,17 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
         if (unresolved_safety == 0)
             break;
     }
-    printf(" --- done, vars=%8.3g, clauses=%8.3g, conflicts=%8.3g\n", (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
-    s.printStats();
+    if (tip.verbosity >= 1){
+        double total_time = cpuTime() - time_before;
+        printf(" --- done,  vrs=%8.3g, cls=%8.3g, con=%8.3g",
+               (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
+        if (tip.verbosity >= 2)
+            printf(", time(solve=%6.1f s, total=%6.1f s)\n",
+                   solve_time, total_time);
+        else
+            printf("\n");
+        s.printStats();
+    }
 }
 
 };

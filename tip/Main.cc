@@ -27,8 +27,9 @@ int main(int argc, char** argv)
 {
     setlinebuf(stdout);
     setUsageHelp("USAGE: %s [options] <input-file> <result-output-file>\n\n  where input is in plain or gzipped binary AIGER.\n");
-    IntOption bver ("MAIN", "bv", "Version of BMC to be used.", 0, IntRange(0,2));
-    IntOption depth("MAIN", "k",  "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
+    IntOption bver ("MAIN", "bv",   "Version of BMC to be used.", 0, IntRange(0,2));
+    IntOption depth("MAIN", "k",    "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
+    IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,3));
 
     parseOptions(argc, argv, true);
 
@@ -36,6 +37,7 @@ int main(int argc, char** argv)
         printUsageAndExit(argc, argv);
 
     TipCirc tc;
+    tc.verbosity = verb;
     tc.readAiger(argv[1]);
     tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
 

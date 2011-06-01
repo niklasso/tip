@@ -92,6 +92,8 @@ private:
 
 class TipCirc : public SeqCirc {
 public:
+    TipCirc() : verbosity(0){}
+
     void readAiger     (const char* file);
     void writeAiger    (const char* file);
     void printAigerRes (const char* file);
@@ -113,6 +115,9 @@ public:
     PropertySet   properties;
 
     vec<Property> all_props;  // Set of properties and their current status.
+
+    // Settings:
+    int           verbosity;
 };
 
 //=================================================================================================

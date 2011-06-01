@@ -19,6 +19,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "minisat/mtl/Sort.h"
 #include "minisat/simp/SimpSolver.h"
+#include "minisat/utils/System.h"
 #include "mcl/CircPrelude.h"
 #include "mcl/Clausify.h"
 #include "mcl/DagShrink.h"
@@ -238,16 +239,22 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
     }        
 #endif
 
-    printf(" ... clausifyInstance(): (ORIG) vars=%d, clauses=%d\n", s.nFreeVars(), s.nClauses());
-    // Simplify & unfreeze variables:
+    int num_vrs_before = s.nFreeVars();
+    int num_cls_before = s.nClauses();
 
+    // Simplify & unfreeze variables:
     s.eliminate();
-    //s.simplify();
 
     // TODO: not sure if it matters to unfreeze variables as this is a throw-away SAT instance
     // anyway.
     s.thaw();
-    printf(" ... clausifyInstance(): (SIMP) vars=%d, clauses=%d\n", s.nFreeVars(), s.nClauses());
+
+    if (t.verbosity >= 3)
+        printf(" ... clausify: circ-ands(%d => %d), circ-inps(%d => %d), cnf-vars(%d => %d), cnf-cls(%d => %d)\n",
+               t.main.nGates(), inst.circ.nGates(),
+               t.main.nInps(), inst.circ.nInps(),
+               num_vrs_before, s.nFreeVars(),
+               num_cls_before, s.nClauses());
 
     // Extract references to all clausified gates:
     lit_map.clear();
@@ -467,7 +474,7 @@ void extractEquivsFromFront(const TipCirc& t, const vec<Sig>& front, Equivs& eqs
             n_consts = eqs[i].size()-1;
             break; }
 
-    printf(" ... front equivalences: #const=%d, #classes=%d\n", n_consts, eqs.size());
+    // printf(" ... front equivalences: #const=%d, #classes=%d\n", n_consts, eqs.size());
 #endif
 }
 
@@ -670,23 +677,26 @@ void SimpUnroller::printFront()
 
 void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 {
+    double                 time_before   = cpuTime();
+    double                 solve_time    = 0;
+    double                 simp_time     = 0;
+    double                 clausify_time = 0;
     vec<LIFrame>           ui;                  // Unrolled set of input frames.
     SimpSolver             s;                   // SAT-solver.
     SimpUnroller           unroll(tip, ui, s);  // Unroller-helper object.
     GMap<Lit>              cl_map;              // Reusable map from 't.main' to literals in 's'.
 
     //tip.printCirc();
-
     //s.verbosity = 1;
     for (uint32_t i = 0; i < stop_cycle; i++){
+        double clausify_time_begin = cpuTime();
         unroll(cl_map);
-        //printf(" ... unrolling cycle %d\n", i);
+        clausify_time += cpuTime() - clausify_time_begin;
 
         if (i < begin_cycle)
             continue;
 
         // Clausify and freeze all properties:
-        //frozen_vars.clear();
         for (int j = 0; j < tip.all_props.size(); j++){
             Property p = tip.all_props[j];
             if (tip.properties.propType(p) != ptype_Safety || tip.properties.propStatus(p) != pstat_Unknown)
@@ -698,7 +708,9 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
         }
 
         // Do CNF-level simplification:
+        double simp_time_before = cpuTime();
         s.eliminate();
+        simp_time += cpuTime() - simp_time_before;
 
         // Do SAT-tests:
         int unresolved_safety = 0;
@@ -710,19 +722,28 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             Sig psig = tip.properties.propSig(p);
             Lit plit = cl_map[gate(psig)] ^ sign(psig);
             assert(plit != lit_Undef);
-            printf(" --- cycle=%3d, vars=%8.3g, clauses=%8.3g, conflicts=%8.3g\n", i, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
 
-            //printf(" ... testing property %d: %s%d=%c\n", p, sign(plit)?"-":"", var(plit),
-            // s.value(plit)==l_Undef?'x':s.value(plit)==l_True?'1':'0');
-            if (s.solve(~plit, false, false)){
-                //printf (" ... property falsified.\n");
+            if (tip.verbosity >= 1){
+                double total_time = cpuTime() - time_before;
+                printf(" --- k=%3d, vrs=%8.3g, cls=%8.3g, con=%8.3g",
+                       i, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
+                if (tip.verbosity >= 2)
+                    printf(", time(solve=%6.1f s, simp=%6.1f s, claus=%6.1f s, total=%6.1f s)\n",
+                           solve_time, simp_time, clausify_time, total_time);
+                else
+                    printf("\n");
+            }
+
+            double solve_time_before = cpuTime();
+            bool ret = s.solve(~plit, false, false);
+            solve_time += cpuTime() - solve_time_before;
+
+            if (ret){
                 Trace tid = tip.traces.newTrace();
                 unroll.extractTrace(s, tip.traces.getFrames(tid));
                 tip.properties.setPropFalsified(p, tid);
-                //tip.printTrace(tid);
             }else{
                 unresolved_safety++;
-                //printf (" ... property true.\n");
                 assert(s.value(plit) == l_True);
             }
         }
@@ -734,8 +755,18 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
         if (unresolved_safety == 0)
             break;
     }
-    printf(" --- done, vars=%8.3g, clauses=%8.3g, conflicts=%8.3g\n", (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
-    s.printStats();
+
+    if (tip.verbosity >= 1){
+        double total_time = cpuTime() - time_before;
+        printf(" --- done,  vrs=%8.3g, cls=%8.3g, con=%8.3g",
+               (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
+        if (tip.verbosity >= 2)
+            printf(", time(solve=%6.1f s, simp=%6.1f s, claus=%6.1f s, total=%6.1f s)\n",
+                   solve_time, simp_time, clausify_time, total_time);
+        else
+            printf("\n");
+        s.printStats();
+    }
 }
 
 };
