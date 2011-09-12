@@ -44,7 +44,7 @@ int main(int argc, char** argv)
     if (argc == 3){
         FILE* res = fopen(argv[2], "w");
         if (!res) printf("ERROR! Failed to open results file: %s\n", argv[2]), exit(1);
-        tc.printResults(res);
+        tc.writeResultsAiger(res);
         fclose(res);
     }
 

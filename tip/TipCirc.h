@@ -20,6 +20,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Tip_TipCirc_h
 #define Tip_TipCirc_h
 
+#include "mcl/Equivs.h"
 #include "mcl/SeqCirc.h"
 
 namespace Tip {
@@ -29,16 +30,84 @@ using namespace Minisat;
 //=================================================================================================
 // Basic types:
 
-typedef enum { ptype_Safety = 0, ptype_Liveness = 1 }                     PropType;
-typedef enum { pstat_True = 0, pstat_Falsifiable = 1, pstat_Unknown = 2 } PropStatus;
+typedef enum { pstat_Proved = 0, pstat_Falsified = 1, pstat_Unknown = 2 } PropStatus;
 
 typedef vec<Gate> IFrame;
-typedef uint32_t  Trace;
-typedef uint32_t  Property;
+typedef int       Trace;
+typedef int       SafeProp;
+typedef int       LiveProp;
 
-enum { trace_Undef = UINT32_MAX };
-enum { prop_Undef  = UINT32_MAX };
+enum { trace_Undef = -1 };
+enum { prop_Undef  = -1 };
+enum { loop_none   = UINT32_MAX };
 
+struct TraceData {
+    vec<vec<lbool> > frames;
+    uint32_t         loop;
+    TraceData() : loop(loop_none){}
+};
+
+struct PropData {
+    Sig        sig;
+    PropStatus stat;
+    Trace      cex;
+    PropData(Sig s) : sig(s), stat(pstat_Unknown), cex(trace_Undef){}
+};
+
+
+class TraceAdaptor
+{
+    TraceAdaptor* chain;
+public:
+    typedef uint32_t InputId;
+
+    TraceAdaptor(TraceAdaptor* chain_ = NULL) : chain(chain_){}
+    virtual ~TraceAdaptor(){ delete chain; }
+
+    void adapt(vec<vec<lbool> >& frames){
+        patch(frames);
+        if (chain != NULL) chain->adapt(frames);
+    }
+
+private:
+    virtual void patch(vec<vec<lbool> >& frames) = 0;
+};
+
+
+class AigerInitTraceAdaptor : public TraceAdaptor
+{
+    struct FlopInit {
+        lbool   val;  // Initialized to 0, 1, or x.
+        InputId x_id; // Input-number in case of x.
+    };
+
+    vec<FlopInit> flop_init;
+
+    void patch(vec<vec<lbool> >& frames)
+    {
+        vec<lbool>  new_zero;
+        vec<lbool>& prv_zero = frames[0];
+
+        for (int i = 0; i < flop_init.size(); i++)
+            if (flop_init[i].val == l_Undef)
+                new_zero.push(prv_zero[flop_init[i].x_id]);
+            else
+                new_zero.push(flop_init[i].val);
+        new_zero.moveTo(prv_zero);
+    }
+
+
+public:
+    void flop(InputId fid, lbool val, InputId x_id = UINT32_MAX)
+    {
+        flop_init.growTo(fid+1);
+        flop_init[fid].val  = val;
+        flop_init[fid].x_id = x_id;
+    }
+};
+
+
+#if 0
 // TODO: these classes are sketchy at the moment.
 
 //=================================================================================================
@@ -46,9 +115,11 @@ enum { prop_Undef  = UINT32_MAX };
 
 class TraceSet {
 public:
-    Trace             newTrace ()         { trace_set.push(); return trace_set.size()-1; }
-    vec<vec<lbool> >& getFrames(Trace tr) { assert(tr < (Trace)trace_set.size()); return trace_set[tr].frames; }
-    uint32_t&         getLoop  (Trace tr) { assert(tr < (Trace)trace_set.size()); return trace_set[tr].loop; }
+    Trace                   newTrace ()         { trace_set.push(); return trace_set.size()-1; }
+    vec<vec<lbool> >&       getFrames(Trace tr) { assert(tr < (Trace)trace_set.size()); return trace_set[tr].frames; }
+    const vec<vec<lbool> >& getFrames(Trace tr) const { assert(tr < (Trace)trace_set.size()); return trace_set[tr].frames; }
+    uint32_t&               getLoop  (Trace tr) { assert(tr < (Trace)trace_set.size()); return trace_set[tr].loop; }
+    void                    clear    ()         { trace_set.clear(); }
 
     enum { loop_none = UINT32_MAX };
 
@@ -66,13 +137,15 @@ private:
 
 class PropertySet {
 public:
-    Property   newProperty      (Sig s, PropType t)    { prop_set.push(PropData(s,t)); return prop_set.size()-1; }
-    void       setPropTrue      (Property p)           { assert(p < (Property)prop_set.size()); prop_set[p].stat = pstat_True; }
-    void       setPropFalsified (Property p, Trace cex){ assert(p < (Property)prop_set.size()); prop_set[p].stat = pstat_Falsifiable; prop_set[p].cex = cex; }
-    Sig        propSig          (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].sig; }
-    PropType   propType         (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].type; }
-    PropStatus propStatus       (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].stat; }
-    Trace      propCex          (Property p) const     { assert(p < (Property)prop_set.size()); return prop_set[p].cex; }
+    Property   newProperty      (Sig s, PropType t)    { props.push(PropData(s,t)); return props.size()-1; }
+    void       setPropTrue      (Property p)           { assert(p < (Property)props.size()); props[p].stat = pstat_True; }
+    void       setPropFalsified (Property p, Trace cex){ assert(p < (Property)props.size()); props[p].stat = pstat_Falsifiable; props[p].cex = cex; }
+    Sig        propSig          (Property p) const     { assert(p < (Property)props.size()); return props[p].sig; }
+    PropType   propType         (Property p) const     { assert(p < (Property)props.size()); return props[p].type; }
+    PropStatus propStatus       (Property p) const     { assert(p < (Property)props.size()); return props[p].stat; }
+    Trace      propCex          (Property p) const     { assert(p < (Property)props.size()); return props[p].cex; }
+    void       clear            ()                     { props.clear(); }
+
 private:
     struct PropData {
         Sig        sig;
@@ -81,8 +154,9 @@ private:
         Trace      cex;
         PropData(Sig s, PropType t) : sig(s), type(t), stat(pstat_Unknown), cex(trace_Undef){}
     };
-    vec<PropData> prop_set;
+    vec<PropData> props;
 };
+#endif
 
 //=================================================================================================
 // A class for representing a sequential circuit together with properties and their current
@@ -92,33 +166,60 @@ private:
 
 class TipCirc : public SeqCirc {
 public:
-    TipCirc() : verbosity(0){}
+    TipCirc() : tradaptor(NULL), verbosity(0){}
 
-    void readAiger     (const char* file);
-    void writeAiger    (const char* file);
-    void printAigerRes (const char* file);
+    //---------------------------------------------------------------------------------------------
+    // Top-level user API:
 
     typedef enum { bmc_Basic = 0, bmc_Simp = 1, bmc_Simp2 = 2 } BmcVersion;
-    void bmc           (uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver = bmc_Basic);
 
-    // Helpers:
-    void printTrace    (FILE* out, Trace t);
-    void printResults  (FILE* out);
-    void printCirc     ();
+    void readAiger         (const char* file);
+    void writeAiger        (const char* file) const;
+    void writeResultsAiger (FILE* out) const;
+    void bmc               (uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver = bmc_Basic);
 
-    //TODO: hide data somehow?
-    // private:
-    vec<IFrame>   inps_init;  // Set of input frames for the init circuit.
-    vec<IFrame>   inps_main;  // Set of input frames for the main circuit.
+    //---------------------------------------------------------------------------------------------
+    // Debug:
 
-    TraceSet      traces;
-    PropertySet   properties;
+    void printCirc         () const;
 
-    vec<Property> all_props;  // Set of properties and their current status.
+    //---------------------------------------------------------------------------------------------
+    // Intermediate internal API: (still public)
+
+    // Circuit data: (traces, properties, constraints)
+
+    vec<TraceData> traces;      // Set of traces falsifying some property.
+    vec<PropData>  safe_props;  // Set of safety properties.
+    vec<PropData>  live_props;  // Set of liveness properties.
+    Equivs         cnstrs;      // Set of global constraint (expressed as equivalences).
+    TraceAdaptor*  tradaptor;   // Trace adaptor to compensate trace changing transformations.
+
+    // TODO:
+    //   - fairness constraints.
+    //   - circuit outputs?
+
+    SafeProp newSafeProp (Sig x);
+    LiveProp newLiveProp (Sig x);
+    Trace    newTrace    ()     ;
 
     // Settings:
     int           verbosity;
+
+ private:
+
+    // Internal private helpers:
+    
+    void printTrace      (FILE* out, const vec<vec<lbool> >& tr) const;
+    void printTrace      (FILE* out, Trace t) const;
+    void printTraceAiger (FILE* out, Trace tid) const;
+    void clear           ();
 };
+
+//=================================================================================================
+
+inline SafeProp TipCirc::newSafeProp (Sig x){ safe_props.push(PropData(x)); return safe_props.size()-1; }
+inline LiveProp TipCirc::newLiveProp (Sig x){ live_props.push(PropData(x)); return live_props.size()-1; }
+inline Trace    TipCirc::newTrace    ()     { traces.push(); return traces.size()-1; }
 
 //=================================================================================================
 
