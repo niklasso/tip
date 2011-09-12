@@ -38,6 +38,7 @@ set(TIP_LIB_SOURCES
     tip/unroll/SimpBmc2.cc
     tip/unroll/BasicBmc.cc
     tip/unroll/Unroll.cc
+    tip/constraints/Extract.cc
     tip/TipCirc.cc)
 
 add_library(tip-lib-static STATIC ${TIP_LIB_SOURCES})

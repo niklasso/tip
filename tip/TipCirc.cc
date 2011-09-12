@@ -21,6 +21,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mcl/CircPrelude.h"
 #include "tip/TipCirc.h"
 #include "tip/unroll/Bmc.h"
+#include "tip/constraints/Extract.h"
 
 using namespace Minisat;
 
@@ -82,6 +83,12 @@ namespace Tip {
             simpBmc2(*this, begin_cycle, stop_cycle);
         }
     }
+
+
+    void TipCirc::sce(bool use_minimize_alg, bool only_coi){ 
+        semanticConstraintExtraction(*this, use_minimize_alg, only_coi);
+    }
+
 
     void TipCirc::writeResultsAiger(FILE* out) const {
         // TODO: Collapse properties that use the same counter example trace.

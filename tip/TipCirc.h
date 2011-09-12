@@ -177,6 +177,8 @@ public:
     void writeAiger        (const char* file) const;
     void writeResultsAiger (FILE* out) const;
     void bmc               (uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver = bmc_Basic);
+    void sce               (bool use_minimize_alg = true, bool only_coi = false);
+
 
     //---------------------------------------------------------------------------------------------
     // Debug:

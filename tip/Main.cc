@@ -30,6 +30,7 @@ int main(int argc, char** argv)
     IntOption bver ("MAIN", "bv",   "Version of BMC to be used.", 0, IntRange(0,2));
     IntOption depth("MAIN", "k",    "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,3));
+    IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
 
     parseOptions(argc, argv, true);
 
@@ -38,7 +39,10 @@ int main(int argc, char** argv)
 
     TipCirc tc;
     tc.verbosity = verb;
+
+    // Simple algorithm flow for testing:
     tc.readAiger(argv[1]);
+    if (sce > 0) tc.sce(sce == 1, false);
     tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
 
     if (argc == 3){
