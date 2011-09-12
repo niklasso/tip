@@ -21,77 +21,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "minisat/utils/System.h"
 #include "mcl/CircPrelude.h"
 #include "mcl/Clausify.h"
-#include "tip/bmc/Bmc.h"
+#include "tip/unroll/Unroll.h"
+#include "tip/unroll/Bmc.h"
 
 namespace Tip {
 
 using namespace Minisat;
-
-//=================================================================================================
-// Some helpers:
-//
-
-class Unroller {
-    const TipCirc& tip;
-    Circ&          unroll_circ;
-    vec<Sig>       flop_front;
-
-    void initialize();
-public:
-    Unroller(const TipCirc& t, vec<IFrame>& ui, Circ& uc);
-    void operator()(GMap<Sig>& unroll_map);
-
-    vec<IFrame>&   unroll_inps;
-};
-
-
-Unroller::Unroller(const TipCirc& t, vec<IFrame>& ui, Circ& uc) 
-    : tip(t), unroll_circ(uc), unroll_inps(ui){ initialize(); }
-
-
-void Unroller::initialize()
-{
-    GMap<Sig> init_map;
-    copyCirc(tip.init, unroll_circ, init_map);
-
-    unroll_inps.push();
-    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd() ; ++iit){
-        Gate inp = *iit;
-        assert(!sign(init_map[*iit]));
-        assert(tip.init.number(inp) != UINT32_MAX);
-        unroll_inps.last().growTo(tip.init.number(inp)+1, gate_Undef);
-        unroll_inps.last()[tip.init.number(inp)] = gate(init_map[*iit]);
-    }
-
-    for (int i = 0; i < tip.flps.size(); i++)
-        flop_front.push(tip.flps.init(tip.flps[i]));
-    map(init_map, flop_front);
-}
-
-
-void Unroller::operator()(GMap<Sig>& unroll_map){
-    unroll_map.clear();
-    unroll_map.growTo(tip.main.lastGate(), sig_Undef);
-    for (int i = 0; i < tip.flps.size(); i++)
-        unroll_map[tip.flps[i]] = flop_front[i];
-    copyCirc(tip.main, unroll_circ, unroll_map);
-
-    unroll_inps.push();
-    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
-        Gate inp = *iit;
-        assert(!sign(unroll_map[*iit]));
-        assert(tip.main.number(inp) != UINT32_MAX);
-        unroll_inps.last().growTo(tip.main.number(inp)+1, gate_Undef);
-        unroll_inps.last()[tip.main.number(inp)] = gate(unroll_map[*iit]);
-    }
-
-    for (int i = 0; i < tip.flps.size(); i++){
-        Gate flop     = tip.flps[i];
-        Sig  next     = tip.flps.next(flop);
-        flop_front[i] = unroll_map[gate(next)] ^ sign(next);
-    }
-}
-
 
 //=================================================================================================
 // Implementation of Basic BMC:
@@ -101,12 +36,12 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 {
     double             time_before = cpuTime();
     double             solve_time  = 0;
-    Circ               uc;                  // Unrolled circuit.
-    vec<IFrame>        ui;                  // Unrolled set of input frames.
-    Unroller           unroll(tip, ui, uc); // Unroller-helper object.
-    Solver             s;                   // SAT-solver and clausifyer for unrolled circuit.
+    Circ               uc;                        // Unrolled circuit.
+    vec<IFrame>        ui;                        // Unrolled set of input frames.
+    UnrollCirc         unroll(tip, ui, uc, true); // Unroller-helper object.
+    Solver             s;                         // SAT-solver and clausifyer for unrolled circuit.
     Clausifyer<Solver> cl(uc, s);
-    GMap<Sig>          umap;                // Reusable unroll-map.
+    GMap<Sig>          umap;                      // Reusable unroll-map.
 
     //s.verbosity = 1;
     for (uint32_t i = 0; i < stop_cycle; i++){
@@ -117,12 +52,11 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 
         // Do SAT-tests:
         int unresolved_safety = 0;
-        for (int j = 0; j < tip.all_props.size(); j++){
-            Property p = tip.all_props[j];
-            if (tip.properties.propType(p) != ptype_Safety || tip.properties.propStatus(p) != pstat_Unknown)
+        for (SafeProp p = 0; p < tip.safe_props.size(); p++){
+            if (tip.safe_props[p].stat != pstat_Unknown)
                 continue;
             
-            Sig psig_orig   = tip.properties.propSig(p);
+            Sig psig_orig   = tip.safe_props[p].sig;
             Sig psig_unroll = umap[gate(psig_orig)] ^ sign(psig_orig);
             assert(psig_unroll != sig_Undef);
             Lit plit = cl.clausify(psig_unroll);
@@ -144,14 +78,15 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 
             if (ret){
                 // Property falsified, create and extract trace:
-                Trace             cex    = tip.traces.newTrace();
-                vec<vec<lbool> >& frames = tip.traces.getFrames(cex);
-                for (int k = 0; k < unroll.unroll_inps.size(); k++){
+                Trace             cex    = tip.newTrace();
+                vec<vec<lbool> >& frames = tip.traces[cex].frames;
+                for (int k = 0; k < ui.size(); k++){
                     frames.push();
-                    for (int l = 0; l < unroll.unroll_inps[k].size(); l++)
-                        frames.last().push(cl.modelValue(unroll.unroll_inps[k][l]));
+                    for (int l = 0; l < ui[k].size(); l++)
+                        frames.last().push(cl.modelValue(ui[k][l]));
                 }
-                tip.properties.setPropFalsified(p, cex);
+                tip.safe_props[p].stat = pstat_Falsified;
+                tip.safe_props[p].cex  = cex;
             }else{
                 unresolved_safety++;
             }

@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mcl/Clausify.h"
 #include "mcl/DagShrink.h"
 #include "mcl/Equivs.h"
-#include "tip/bmc/Bmc.h"
+#include "tip/unroll/Bmc.h"
 
 namespace Tip {
 
@@ -104,10 +104,9 @@ void instantiateCirc(const TipCirc& t, const Equivs& eq, CircInstance& inst)
         dagShrink(inst.circ, reduced_inst, gate(flop_def_inst), cm, reduced_map, rnd_seed);
     }
 
-    // Copy all property signals:
-    for (int i = 0; i < t.all_props.size(); i++){
-        Property p    = t.all_props[i];
-        Sig prop_t    = t.properties.propSig(p);
+    // Copy all safety property signals:
+    for (SafeProp p = 0; p < t.safe_props.size(); p++){
+        Sig prop_t    = t.safe_props[p].sig;
         Sig prop_inst = inst.map[gate(prop_t)] ^ sign(prop_t);
         dagShrink(inst.circ, reduced_inst, gate(prop_inst), cm, reduced_map, rnd_seed);
 
@@ -160,10 +159,9 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
         s.freezeVar(var(l));
     }
 
-    // Clausify & freeze properties:
-    for (int i = 0; i < t.all_props.size(); i++){
-        Property p            = t.all_props[i];
-        Sig prop_t            = t.properties.propSig(p);
+    // Clausify & freeze safety properties:
+    for (SafeProp p = 0; p < t.safe_props.size(); p++){
+        Sig prop_t            = t.safe_props[p].sig;
         Sig prop_inst         = inst.map[gate(prop_t)] ^ sign(prop_t);
         assert(prop_inst != sig_Undef);
         Lit l                 = cl.clausify(prop_inst);
@@ -233,9 +231,9 @@ void clausifyInstance(const TipCirc& t, const CircInstance& inst,
         printf("\n");
     }
 
-    for (int i = 0; i < t.all_props.size(); i++){
-        Property p            = t.all_props[i];
-        Sig prop_t            = t.properties.propSig(p);
+    for (int i = 0; i < t.props.size(); i++){
+        Property p            = t.props[i];
+        Sig prop_t            = t.property_set.propSig(p);
         Sig prop_inst         = inst.map[gate(prop_t)] ^ sign(prop_t);
         Lit prop_lit          = cl.lookup(prop_inst);
         printf("  prop %d", i);
@@ -379,9 +377,8 @@ void plugClausifiedInstance(const TipCirc& t, const SimpSolver& one, const GMap<
         // printf(" ... plugged-flop-def "); printGate(t.flps[i]);
         // printf(" : %s%d\n", sign(flop_plugged)?"-":"", var(flop_plugged));
     }
-    for (int i = 0; i < t.all_props.size(); i++){
-        Property p   = t.all_props[i];
-        Sig prop_t   = t.properties.propSig(p);
+    for (SafeProp p = 0; p < t.safe_props.size(); p++){
+        Sig prop_t   = t.safe_props[p].sig;
         Lit prop_one = one_lit_map[gate(prop_t)] ^ sign(prop_t);
         assert(prop_one != lit_Undef);
         Lit prop_plugged = plugLit(prop_one, s, lit_remap);
@@ -708,11 +705,10 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             continue;
 
         // Clausify and freeze all properties:
-        for (int j = 0; j < tip.all_props.size(); j++){
-            Property p = tip.all_props[j];
-            if (tip.properties.propType(p) != ptype_Safety || tip.properties.propStatus(p) != pstat_Unknown)
+        for (SafeProp p = 0; p < tip.safe_props.size(); p++){
+            if (tip.safe_props[p].stat != pstat_Unknown)
                 continue;
-            Sig psig = tip.properties.propSig(p);
+            Sig psig = tip.safe_props[p].sig;
             Lit l    = cl_map[gate(psig)] ^ sign(psig);
             assert(l != lit_Undef);
             s.freezeVar(var(l));
@@ -725,12 +721,10 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 
         // Do SAT-tests:
         int unresolved_safety = 0;
-        for (int j = 0; j < tip.all_props.size(); j++){
-            Property p = tip.all_props[j];
-            if (tip.properties.propType(p) != ptype_Safety || tip.properties.propStatus(p) != pstat_Unknown)
+        for (SafeProp p = 0; p < tip.safe_props.size(); p++){
+            if (tip.safe_props[p].stat != pstat_Unknown)
                 continue;
-            
-            Sig psig = tip.properties.propSig(p);
+            Sig psig = tip.safe_props[p].sig;
             Lit plit = cl_map[gate(psig)] ^ sign(psig);
             assert(plit != lit_Undef);
 
@@ -750,9 +744,10 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             solve_time += cpuTime() - solve_time_before;
 
             if (ret){
-                Trace tid = tip.traces.newTrace();
-                unroll.extractTrace(s, tip.traces.getFrames(tid));
-                tip.properties.setPropFalsified(p, tid);
+                Trace cex = tip.newTrace();
+                unroll.extractTrace(s, tip.traces[cex].frames);
+                tip.safe_props[p].stat = pstat_Falsified;
+                tip.safe_props[p].cex  = cex;
             }else{
                 unresolved_safety++;
                 assert(s.value(plit) == l_True);

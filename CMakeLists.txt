@@ -34,9 +34,10 @@ include_directories(${tip_SOURCE_DIR})
 # Build Targets:
 
 set(TIP_LIB_SOURCES
-    tip/bmc/SimpBmc.cc
-    tip/bmc/SimpBmc2.cc
-    tip/bmc/BasicBmc.cc
+    tip/unroll/SimpBmc.cc
+    tip/unroll/SimpBmc2.cc
+    tip/unroll/BasicBmc.cc
+    tip/unroll/Unroll.cc
     tip/TipCirc.cc)
 
 add_library(tip-lib-static STATIC ${TIP_LIB_SOURCES})

@@ -21,7 +21,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "minisat/utils/System.h"
 #include "mcl/CircPrelude.h"
 #include "mcl/Clausify.h"
-#include "tip/bmc/Bmc.h"
+#include "tip/unroll/Bmc.h"
 
 namespace Tip {
 
@@ -93,12 +93,11 @@ void SimpUnroller::operator()(Clausifyer<SimpSolver>& unroll_cl){
         flop_front[i] = l;
     }
 
-    // Clausify properties:
-    for (int j = 0; j < tip.all_props.size(); j++){
-        Property p = tip.all_props[j];
-        if (tip.properties.propType(p) != ptype_Safety || tip.properties.propStatus(p) != pstat_Unknown)
+    // Clausify safety properties:
+    for (SafeProp p = 0; p < tip.safe_props.size(); p++){
+        if (tip.safe_props[p].stat != pstat_Unknown)
             continue;
-        Lit l = unroll_cl.clausify(tip.properties.propSig(p));
+        Lit l = unroll_cl.clausify(tip.safe_props[p].sig);
         solver.freezeVar(var(l));
     }
 
@@ -145,12 +144,11 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 
         // Do SAT-tests:
         int unresolved_safety = 0;
-        for (int j = 0; j < tip.all_props.size(); j++){
-            Property p = tip.all_props[j];
-            if (tip.properties.propType(p) != ptype_Safety || tip.properties.propStatus(p) != pstat_Unknown)
+        for (SafeProp p = 0; p < tip.safe_props.size(); p++){
+            if (tip.safe_props[p].stat != pstat_Unknown)
                 continue;
             
-            Lit plit = ucl.lookup(tip.properties.propSig(p));
+            Lit    plit       = ucl.lookup(tip.safe_props[p].sig);
             double total_time = cpuTime() - time_before;
             if (tip.verbosity >= 1){
                 printf(" --- k=%3d, vrs=%8.3g, cls=%8.3g, con=%8.3g",
@@ -168,8 +166,8 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 
             if (ret){
                 // Property falsified, create and extract trace:
-                Trace             cex    = tip.traces.newTrace();
-                vec<vec<lbool> >& frames = tip.traces.getFrames(cex);
+                Trace             cex    = tip.newTrace();
+                vec<vec<lbool> >& frames = tip.traces[cex].frames;
                 for (int k = 0; k < unroll.unroll_inps.size(); k++){
                     frames.push();
                     for (int l = 0; l < unroll.unroll_inps[k].size(); l++)
@@ -179,7 +177,8 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
                             frames.last().push(l_Undef);
                 }
                 printf (" ... property falsified, created trace = %d of length %d.\n", cex, frames.size());
-                tip.properties.setPropFalsified(p, cex);
+                tip.safe_props[p].stat = pstat_Falsified;
+                tip.safe_props[p].cex  = cex;
             }else{
                 unresolved_safety++;
                 assert(s.value(plit) == l_True);

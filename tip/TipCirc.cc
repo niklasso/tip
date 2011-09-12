@@ -20,7 +20,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mcl/Aiger.h"
 #include "mcl/CircPrelude.h"
 #include "tip/TipCirc.h"
-#include "tip/bmc/Bmc.h"
+#include "tip/unroll/Bmc.h"
 
 using namespace Minisat;
 
