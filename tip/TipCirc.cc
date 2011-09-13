@@ -22,6 +22,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/TipCirc.h"
 #include "tip/unroll/Bmc.h"
 #include "tip/constraints/Extract.h"
+#include "tip/induction/Induction.h"
 
 using namespace Minisat;
 
@@ -40,7 +41,7 @@ namespace Tip {
 #else
         // Parse with AIGER v1.9
         AigerSections sects;
-        ::readAiger_v19(file, *this, sects);
+        readAiger_v19(file, *this, sects);
 
         // Assume file is AIGER v1 if no properties exists but circuit has outputs:
         if (sects.outs.size() > 0 && sects.cnstrs.size() == 0 && sects.fairs.size() == 0 &&
@@ -87,6 +88,10 @@ namespace Tip {
 
     void TipCirc::sce(bool use_minimize_alg, bool only_coi){ 
         semanticConstraintExtraction(*this, use_minimize_alg, only_coi);
+    }
+
+    void TipCirc::trip(){
+        relativeInduction(*this);
     }
 
 

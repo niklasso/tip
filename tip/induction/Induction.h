@@ -23,7 +23,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Tip {
 
-void relativeInduction_v1(TipCirc& tip);
+void relativeInduction(TipCirc& tip);
 
 //=================================================================================================
 } // namespace Tip
