@@ -85,6 +85,75 @@ void UnrollCirc::operator()(GMap<Sig>& unroll_map){
     }
 }
 
+//=================================================================================================
+// UnrollCirc2 (new attempt):
+
+
+UnrollCirc2::UnrollCirc2(const TipCirc& t, Circ& uc, GMap<Sig>& imap)
+    : tip(t), ucirc(uc)
+{ 
+    imap.clear();
+    copyCirc(tip.init, ucirc, imap);
+    for (int i = 0; i < tip.flps.size(); i++)
+        flop_front.push(tip.flps.init(tip.flps[i]));
+    map(imap, flop_front);
+}
+
+
+UnrollCirc2::UnrollCirc2(const TipCirc& t, Circ& uc)
+    : tip(t), ucirc(uc)
+{ 
+    for (int i = 0; i < tip.flps.size(); i++)
+        flop_front.push(ucirc.mkInp());
+}
+
+
+void UnrollCirc2::operator()(GMap<Sig>& umap){
+    umap.clear();
+    umap.growTo(tip.main.lastGate(), sig_Undef);
+    for (int i = 0; i < tip.flps.size(); i++)
+        umap[tip.flps[i]] = flop_front[i];
+    copyCirc(tip.main, ucirc, umap);
+
+    for (int i = 0; i < tip.flps.size(); i++){
+        Gate flop     = tip.flps[i];
+        Sig  next     = tip.flps.next(flop);
+        flop_front[i] = umap[gate(next)] ^ sign(next);
+    }
+}
+
+//=================================================================================================
+// UnrollCnf: (sketch)
+
+void UnrollCnf::pinGate(Gate g)
+{
+    pinned.growTo(g, 0);
+    pinned[g] = 1;
+}
+
+
+bool UnrollCnf::isPinned(Gate g)
+{
+    return pinned.has(g) && pinned[g];
+}
+
+
+UnrollCnf::UnrollCnf(const TipCirc& t, SimpSolver& us, GMap<Lit>& imap)
+    : tip(t), usolver(us)
+{
+}
+
+
+UnrollCnf::UnrollCnf(const TipCirc& t, SimpSolver& us)
+    : tip(t), usolver(us)
+{
+}
+
+
+void UnrollCnf::operator()(GMap<Sig>& umap)
+{
+}
+
 
 //=================================================================================================
 } // namespace Tip

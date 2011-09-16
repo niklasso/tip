@@ -19,6 +19,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Tip_Unroll_h
 #define Tip_Unroll_h
 
+#include "minisat/simp/SimpSolver.h"
 #include "mcl/CircPrelude.h"
 #include "tip/TipCirc.h"
 
@@ -37,6 +38,70 @@ public:
     UnrollCirc(const TipCirc& t, vec<IFrame>& ui, Circ& uc, bool reset);
     void operator()(GMap<Sig>& unroll_map);
 };
+
+
+class UnrollCirc2
+{
+    const TipCirc& tip;
+    Circ&          ucirc;
+    vec<Sig>       flop_front;
+public:
+
+    UnrollCirc2(const TipCirc& t, Circ& uc, GMap<Sig>& imap);  // Initialize with reset circuit.
+    UnrollCirc2(const TipCirc& t, Circ& uc);                   // Initialize with random flops.
+
+    void operator()(GMap<Sig>& umap);
+};
+
+
+class UnrollCnf
+{
+public:
+    void pinGate(Gate g);
+
+    UnrollCnf(const TipCirc& t, SimpSolver& us, GMap<Lit>& imap);  // Initialize with reset circuit.
+    UnrollCnf(const TipCirc& t, SimpSolver& us);                   // Initialize with random flops.
+
+    void operator()(GMap<Sig>& umap);
+
+private:
+    const TipCirc& tip;
+    SimpSolver&    usolver;
+    GMap<char>     pinned;
+
+    bool isPinned(Gate g);
+};
+
+
+//=================================================================================================
+// Convenience helpers:
+
+
+template<class T>
+void extractResetInput(const TipCirc& tip, const GMap<T>& m, vec<vec<T> >& frames, T undef)
+{
+    frames.push();
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit){
+        Gate inp = *iit;
+        assert(tip.init.number(inp) != UINT32_MAX); // Inputs must be numbered.
+        frames.last().growTo(tip.init.number(inp)+1, undef);
+        frames.last()[tip.init.number(inp)] = m[*iit];
+    }
+}
+
+
+template<class T>
+void extractInput(const TipCirc& tip, const GMap<T>& m, vec<vec<T> >& frames, T undef)
+{
+    frames.push();
+    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
+        Gate inp = *iit;
+        assert(tip.main.number(inp) != UINT32_MAX); // Inputs must be numbered.
+        frames.last().growTo(tip.main.number(inp)+1, undef);
+        frames.last()[tip.main.number(inp)] = m[*iit];
+    }
+}
+
 
 //=================================================================================================
 } // namespace Tip
