@@ -95,6 +95,28 @@ namespace Tip {
     }
 
 
+    void TipCirc::printResults() const
+    {
+        int n_proved    = 0;
+        int n_falsified = 0;
+        int n_unknown   = 0;
+
+        for (SafeProp p = 0; p < safe_props.size(); p++)
+            if (safe_props[p].stat == pstat_Proved)
+                n_proved++;
+            else if (safe_props[p].stat == pstat_Falsified)
+                n_falsified++;
+            else
+                n_unknown++;
+
+        printf("Verification results\n");
+        printf("====================\n");
+        printf("  Proved :    %d\n", n_proved);
+        printf("  Falsified : %d\n", n_falsified);
+        printf("  Unknown:    %d\n", n_unknown);
+    }
+
+
     void TipCirc::writeResultsAiger(FILE* out) const {
         // TODO: Collapse properties that use the same counter example trace.
         for (SafeProp p = 0; p < safe_props.size(); p++)
@@ -104,7 +126,7 @@ namespace Tip {
                 fprintf(out, ".\n");
                 break;
             }else if (safe_props[p].stat == pstat_Proved){
-                fprintf(out, "0\nb%d", p);
+                fprintf(out, "0\nb%d\n", p);
                 fprintf(out, ".\n");
                 break;
             }

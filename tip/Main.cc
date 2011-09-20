@@ -46,6 +46,7 @@ int main(int argc, char** argv)
 
     //tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
     tc.trip();
+    tc.printResults();
 
     if (argc == 3){
         FILE* res = fopen(argv[2], "w");

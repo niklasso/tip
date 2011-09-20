@@ -216,6 +216,16 @@ namespace Tip {
         solver->thaw();
     }
 
+    struct SigLitPair {
+        Sig x;
+        Lit l;
+    };
+
+    struct SigLitCmp {
+        bool operator()(SigLitPair p1, SigLitPair p2) const {
+            return p1.l < p2.l;
+        }
+    };
 
     bool InitInstance::prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next)
     {
@@ -251,8 +261,9 @@ namespace Tip {
 
             return false;
         }else{
-                
+#if 0
             // Proved the clause:
+            // does not shrink properly when multiple signals map to the same literal:
             vec<Sig> subset;
             for (unsigned i = 0; i < c.size(); i++){
                 Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
@@ -263,6 +274,50 @@ namespace Tip {
             yes = Clause(subset, 0);
             //printf("[InitInstance::prove] &yes = %p\n", &yes);
             return true;
+#else
+            vec<SigLitPair> slits;
+            for (unsigned i = 0; i < c.size(); i++){
+                SigLitPair p;
+                p.x   = c[i];
+                Sig x = tip.flps.next(gate(p.x)) ^ sign(p.x);
+                p.l   = umapl[1][gate(x)] ^ sign(x);
+                slits.push(p);
+            }
+
+            sort(slits, SigLitCmp());
+
+            // printf(" .. slits-before = ");
+            // for (int i = 0; i < slits.size(); i++)
+            //     printf("%s%d:%s%d ", 
+            //            sign(slits[i].x)?"~":"", index(gate(slits[i].x)),
+            //            sign(slits[i].l)?"~":"", var(slits[i].l));
+            // printf("\n");
+            
+            int i,j;
+            for (i = j = 1; i < slits.size(); i++)
+                if (slits[i].l != slits[j-1].l)
+                    slits[j++] = slits[i];
+            slits.shrink(i-j);
+
+            // if (i - j > 0)
+            //     printf("[InitInstance::prove] potential reason shrunk with: %d\n", i - j);
+            
+            // printf(" .. slits-after = ");
+            // for (int i = 0; i < slits.size(); i++)
+            //     printf("%s%d:%s%d ", 
+            //            sign(slits[i].x)?"~":"", index(gate(slits[i].x)),
+            //            sign(slits[i].l)?"~":"", var(slits[i].l));
+            // printf("\n");
+
+            vec<Sig> subset;
+            for (int i = 0; i < slits.size(); i++)
+                if (find(solver->conflict, slits[i].l))
+                    subset.push(slits[i].x);
+            yes = Clause(subset, 0);
+
+            return true;
+#endif
+
         }
     }
 
@@ -459,16 +514,12 @@ namespace Tip {
             }
 
             // What level was sufficient?
-            int k = -1;
+            int k = UINT32_MAX;
             for (int i = c.cycle-1; i < activate.size(); i++)
                 if (find(solver->conflict, ~activate[i])){
                     k = i+1;
                     break;
                 }
-
-            // FIXME: does this mean it is invariant?
-            if (k == -1)
-                k = activate.size()-1;
 
             yes = Clause(subset, k);
             //printf("[StepInstance::prove] &yes = %p\n", &yes);

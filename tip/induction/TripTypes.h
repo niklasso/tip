@@ -25,6 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Tip {
 
+    typedef uint32_t Cycle;
+    enum { cycle_Undef = UINT32_MAX };
+
     // A class to represent a clause over circuit signals (Sig):
     class Clause {
         unsigned sz     : 31;
@@ -32,10 +35,10 @@ namespace Tip {
         Sig*     lits;
         
     public:
-        unsigned cycle;
+        Cycle cycle;
         
         template<class Lits>
-        Clause(const Lits& xs, unsigned cycle_) : sz(xs.size()), active(1), cycle(cycle_)
+        Clause(const Lits& xs, Cycle cycle_) : sz(xs.size()), active(1), cycle(cycle_)
         {
             lits = new Sig[sz];
             for (unsigned i = 0; i < sz; i++)
@@ -54,8 +57,15 @@ namespace Tip {
         
         // Assignment operator:
         Clause& operator=(const Clause& c){
-            this->~Clause();
-            new (this) Clause(c);
+            // this->~Clause();
+            // new (this) Clause(c);
+            delete [] lits;
+            sz     = c.sz;
+            active = c.active;
+            cycle  = c.cycle;
+            lits = new Sig[sz];
+            for (unsigned i = 0; i < sz; i++)
+                lits[i] = c[i];            
             return *this;
         }
         
@@ -102,7 +112,7 @@ namespace Tip {
         Inputs                 inputs;
         const ScheduledClause* next;
         template<class Lits, class Inps>
-        ScheduledClause(const Lits& xs, unsigned cycle_, const Inps& is, const ScheduledClause* next_)
+        ScheduledClause(const Lits& xs, Cycle cycle_, const Inps& is, const ScheduledClause* next_)
             : Clause(xs, cycle_), inputs(is), next(next_){}
 
         ScheduledClause() : next(NULL){}
