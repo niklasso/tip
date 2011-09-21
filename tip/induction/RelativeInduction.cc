@@ -141,7 +141,7 @@ namespace Tip {
             // are resolved (i.e. all properties were falsifiable), and false otherwise.
             bool baseCase();
 
-            void printStats();
+            void printStats(bool newline = true);
         };
 
         bool Trip::proveInit(const ScheduledClause* c, Clause& yes, ScheduledClause*& no){ 
@@ -582,6 +582,7 @@ namespace Tip {
                                 tip.safe_props[p].stat = pstat_Proved;
                             goto next_prop;
                         }
+                        printStats(false);
                     }
                     unresolved++;
                 }
@@ -616,31 +617,19 @@ namespace Tip {
         }
 
 
-        void Trip::printStats()
+        void Trip::printStats(bool newline)
         {
             vec<vec<Clause*> > F; clausesByCycle(F);
             printf("%d: ", size());
             for (int i = 0; i < F.size(); i++)
                 printf("%d ", F[i].size());
-            printf("\n");
+            printf(newline ? "\n" : "\r");
         }
 
 
         void Trip::printClause(const Clause& c)
         {
-            printf("{ ");
-            for (unsigned i = 0; i < c.size(); i++){
-                if (i > 0) printf(", ");
-                if (sign(c[i])) printf("~");
-                if (tip.flps.isFlop(gate(c[i])))
-                    printf("f");
-                else if (type(c[i]) == gtype_Inp)
-                    printf("i");
-                else
-                    assert(false);
-                printf("%d", tip.main.number(gate(c[i])));
-            }
-            printf(" }@%d", c.cycle);
+            Tip::printClause(tip, c);
         }
 
 

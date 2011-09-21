@@ -24,6 +24,32 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 namespace Tip {
 
     //===================================================================================================
+    // Helper class, should maybe be internal later:
+    class InstanceModel {
+        vec<Lit> inputs;
+    public:
+        InstanceModel(const vec<Lit>& inps, const SimpSolver& s)
+            {
+                for (int i = 0; i < inps.size(); i++){
+                    assert(s.modelValue(inps[i]) != l_Undef);
+                    inputs.push(inps[i] ^ (s.modelValue(inps[i]) == l_False));
+                }
+            }
+        InstanceModel(const vec<Lit>& inps){ copy(inps, inputs); }
+
+        int   size      ()       const { return inputs.size(); }
+        Lit   operator[](int i)  const { return inputs[i]; }
+        void  copyTo    (vec<Lit>& out) const { inputs.copyTo(out); }
+
+        lbool value     (Gate g, const GMap<Lit>& umap) const
+        {
+            // TODO: naive implementation for now.
+            return find(inputs, umap[g]) ? l_True : find(inputs, ~umap[g]) ? l_False : l_Undef; 
+        }
+    };
+
+
+    //===================================================================================================
     class InitInstance {
         const TipCirc& tip;
         
@@ -49,9 +75,11 @@ namespace Tip {
         SimpSolver*         solver;
         GMap<Lit>           umapl[2];
         vec<Lit>            inputs;
-        vec<Lit>            outputs;
+        Lit                 trigg;
         
         void reset();
+        lbool evaluate(const InstanceModel& model, Sig p);
+
     public:
         void clearClauses();
         void addClause   (const Clause& c);
@@ -75,6 +103,7 @@ namespace Tip {
         vec<Lit>       activate;
         
         void reset();
+        void evaluate(const InstanceModel& model, vec<Sig>& clause);
         
     public:
         void addClause(const Clause& c);
