@@ -88,6 +88,42 @@ namespace Tip {
         }
 
 
+        // Minimize the last conflicting assumption set:
+        void shrinkConflict(SimpSolver& s)
+        {
+            vec<Lit> ass;
+            vec<Lit> smaller;
+            bool     must_hold;
+            // printf("[shrinkConflict] init = ");
+            // for (int i = 0; i < s.conflict.size(); i++)
+            //     printf("%s%d ", sign(~s.conflict[i])?"-":"", var(s.conflict[i]));
+            // printf("\n");
+            for (;;){
+                ass.clear();
+                for (int i = 0; i < s.conflict.size(); i++)
+                    ass.push(~s.conflict[i]);
+
+                for (int i = 0; i < ass.size(); i++){
+                    smaller.clear();
+                    for (int j = 0; j < ass.size(); j++)
+                        if (i != j)
+                            smaller.push(ass[j]);
+                    // printf("[shrinkConflict] trying to remove %s%d ", sign(ass[i])?"-":"", var(ass[i]));
+                    if (!s.solve(smaller)){
+                        // printf(" (succeeded)\n");
+                        goto retry;
+                    }else{
+                        // printf(" (failed)\n");
+                    }
+                }
+                must_hold = !s.solve(ass);
+                assert(must_hold);
+                break;
+            retry:;
+            }
+        }
+
+
         // Minimize set of 'xs' that falsifies one of 'top':
         void shrinkModelOnce(SimpSolver& s, vec<Lit>& xs, const vec<Lit>& top)
         {
@@ -110,9 +146,8 @@ namespace Tip {
             s.addClause(clause);
 
             xs.push(trigg);
-            bool res = s.solve(xs);
+            check(!s.solve(xs));
             xs.pop();
-            assert(res == false);
             s.addClause(~trigg);
 
             // Check 's.conflict' and remove literals not present there:
@@ -239,20 +274,15 @@ namespace Tip {
 
             return false;
         }else{
-#if 0
             // Proved the clause:
-            // does not shrink properly when multiple signals map to the same literal:
-            vec<Sig> subset;
-            for (unsigned i = 0; i < c.size(); i++){
-                Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
-                Lit l = umapl[1][gate(x)] ^ sign(x);
-                if (find(solver->conflict, l))
-                    subset.push(c[i]);
-            }
-            yes = Clause(subset, 0);
-            //printf("[InitInstance::prove] &yes = %p\n", &yes);
-            return true;
-#else
+
+            // Minimize reason more:
+            int n_before = solver->conflict.size();
+            shrinkConflict(*solver);
+            if (tip.verbosity >= 1 && solver->conflict.size() < n_before)
+                printf("[InitInstance::prove] expensive conflict shrink: %d => %d\n",
+                       n_before, solver->conflict.size());
+
             vec<SigLitPair> slits;
             for (unsigned i = 0; i < c.size(); i++){
                 SigLitPair p;
@@ -294,8 +324,6 @@ namespace Tip {
             yes = Clause(subset, 0);
 
             return true;
-#endif
-
         }
     }
 
@@ -318,11 +346,15 @@ namespace Tip {
 
     void PropInstance::addClause(const Clause& c)
     {
-        vec<Lit> xs;
-        xs.push(~trigg);
-        for (unsigned i = 0; i < c.size(); i++)
-            xs.push(umapl[0][gate(c[i])] ^ sign(c[i]));
-        solver->addClause(xs);
+        // Add the clause if it is an invariant, or if it belongs to the last cycle:
+        if (c.cycle == (unsigned)F.size()-1 || c.cycle == cycle_Undef){
+            vec<Lit> xs;
+            if (c.cycle != cycle_Undef)
+                xs.push(~trigg);
+            for (unsigned i = 0; i < c.size(); i++)
+                xs.push(umapl[0][gate(c[i])] ^ sign(c[i]));
+            solver->addClause(xs);
+        }
     }
 
 
@@ -507,8 +539,8 @@ namespace Tip {
             return true;
     }
 
-    PropInstance::PropInstance(const TipCirc& t, const vec<Clause*>& pr)
-        : tip(t), proved(pr), solver(NULL)
+    PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
+        : tip(t), F(F_), solver(NULL)
     {
         reset();
     }
@@ -523,11 +555,14 @@ namespace Tip {
     void StepInstance::addClause(const Clause& c)
     {
         vec<Lit> xs;
-        assert(c.cycle != UINT_MAX);
-        activate.growTo(c.cycle+1, lit_Undef);
-        if (activate[c.cycle] == lit_Undef)
-            activate[c.cycle] = mkLit(solver->newVar());
-        xs.push(~activate[c.cycle]);
+        // Add the unconditionally if it is an invariant, or else triggered by the cycles
+        // activation literal:
+        if (c.cycle != cycle_Undef){
+            activate.growTo(c.cycle+1, lit_Undef);
+            if (activate[c.cycle] == lit_Undef)
+                activate[c.cycle] = mkLit(solver->newVar());
+            xs.push(~activate[c.cycle]);
+        }
 
         for (unsigned i = 0; i < c.size(); i++)
             xs.push(umapl[gate(c[i])] ^ sign(c[i]));
@@ -596,6 +631,17 @@ namespace Tip {
         vec<Lit> assumes;
         this->inputs.copyTo(inputs);
 
+        // Assume proved clauses:
+        if (c.cycle != cycle_Undef)
+            for (int i = c.cycle-1; i < activate.size(); i++)
+                if (activate[i] != lit_Undef){
+                    assumes.push(activate[i]);
+                    inputs .push(activate[i]);
+                }
+
+        // These clauses must be satisfiable:
+        assert(solver->solve(assumes));
+
         // Assume negation of clause 'c':
         for (unsigned i = 0; i < c.size(); i++){
             Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
@@ -604,13 +650,6 @@ namespace Tip {
             outputs.push(~l);
             assumes.push(~l);
         }
-
-        // Assume proved clauses:
-        for (int i = c.cycle-1; i < activate.size(); i++)
-            if (activate[i] != lit_Undef){
-                assumes.push(activate[i]);
-                inputs .push(activate[i]);
-            }
 
         // TODO: also assume the clause itself!
         if (solver->solve(assumes)){
@@ -655,23 +694,25 @@ namespace Tip {
                 if (find(solver->conflict, l))
                     subset.push(c[i]);
             }
+            assert(subset.size() > 0);
 
             // What level was sufficient?
-            int k = UINT32_MAX;
+            unsigned k = cycle_Undef;
             for (int i = c.cycle-1; i < activate.size(); i++)
                 if (find(solver->conflict, ~activate[i])){
                     k = i+1;
                     break;
                 }
 
+            // printf("[StepInstance::prove] c.cycle = %d, k = %d\n", c.cycle, k);
             yes = Clause(subset, k);
             //printf("[StepInstance::prove] &yes = %p\n", &yes);
             return true;
         }
     }
 
-    StepInstance::StepInstance(const TipCirc& t, const vec<Clause*>& pr)
-        : tip(t), proved(pr), solver(NULL)
+    StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
+        : tip(t), F(F_), solver(NULL)
     {
         reset();
     }

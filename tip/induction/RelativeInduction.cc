@@ -33,6 +33,7 @@ namespace Tip {
         void mkUnion(const Vec& c, const Vec& d, vec<Sig>& out)
         {
             // FIXME: clean up.
+            out.clear();
             unsigned i,j;
             for (i = j = 0; i < c.size() || j < d.size();){
                 if (i < c.size() && (j == d.size() || c[i] < d[j]))
@@ -52,8 +53,10 @@ namespace Tip {
             TipCirc&             tip;
 
             // Solver independent data:
-            vec<Clause*>         proved;     // All proved clauses.
-            vec<unsigned>        cycle_size; // Number of proved clauses in each cycle.
+            vec<vec<Clause*> >   F;             // Proved clauses (by cycle).
+            vec<unsigned>        F_size;        // Number of active clauses in each cycle.
+            vec<Clause*>         F_inv;         // Invariant clauses.
+            unsigned             n_inv;         // Number of active invariants;
 
             vec<vec<ScheduledClause*> > 
                                  clause_queue;
@@ -76,6 +79,8 @@ namespace Tip {
             //       or False and a new clause predecessor to be proved in cycle k-1.
             bool             proveStep(const ScheduledClause* c, Clause& yes, ScheduledClause*& no);
             bool             proveStep(const Clause& c, Clause& yes);
+
+            void             generalize(const Clause& init, Clause& c);
 
             // PROVE:   let k = F.size()-1: F[k] ^ Trans => prop'
             // RETURNS: True and a new frame F[k+1] can be opened,
@@ -117,9 +122,6 @@ namespace Tip {
             // Returns number of states in unrolling.
             unsigned         size() const;
 
-            // Fill all active clauses such that the clause 'c' is in out[c.cycle].
-            void             clausesByCycle(vec<vec<Clause*> >& out);
-            
             // DEBUG:
             void             printClause (const Clause& c);
 
@@ -128,9 +130,10 @@ namespace Tip {
             void             verifyInvariant (const vec<Clause>& inv);
 
         public:
-            Trip(TipCirc& t) : tip(t), init(t), prop(t, proved), step(t, proved)
+            Trip(TipCirc& t) : tip(t), n_inv(0), init(t), prop(t, F), step(t, F)
             {
-                cycle_size.push(0);
+                F.push();
+                F_size.push(0);
             }
 
             // Prove or disprove all properties using depth k. Returns true if all properties are decided, and
@@ -153,6 +156,52 @@ namespace Tip {
             return init.prove(c, yes, dummy);
         }
 
+
+        void Trip::generalize(const Clause& ic, Clause& c)
+        {
+            vec<Sig>         try_remove;
+            Clause           d,e;
+            ScheduledClause* dummy;
+            vec<Sig>         xs;
+
+            for (unsigned i = 0; i < c.size(); i++)
+                if (!find(ic, c[i]))
+                    try_remove.push(c[i]);
+
+            // printf("[generalize] ic = ");
+            // printClause(ic);
+            // printf("\n");
+            // printf("[generalize] c  = ");
+            // printClause(c);
+            // printf("\n");
+            mkUnion(ic, c, xs);
+            c = Clause(xs, c.cycle);
+
+            for (int i = 0; i < try_remove.size(); i++)
+                if (find(c, try_remove[i])){
+                    xs.clear();
+                    for (unsigned j = 0; j < c.size(); j++)
+                        if (c[j] != try_remove[i])
+                            xs.push(c[j]);
+                    e = Clause(xs, c.cycle);
+                    // printf("[generalize] e    = ");
+                    // printClause(e);
+                    // printf("\n");
+                    if (step.prove(e, d, dummy)){
+                        mkUnion(ic, d, xs);
+                        c = Clause(xs, c.cycle);
+                        // printf("[generalize] c    = ");
+                        // printClause(c);
+                        // printf("\n");
+                    }else{
+                        // printf("[generalize] failed to remove ");
+                        // printSig(try_remove[i]);
+                        // printf("\n");
+                    }
+                }
+        }
+
+
         bool Trip::proveStep(const ScheduledClause* c, Clause& yes, ScheduledClause*& no)
         {
             Clause yes_step;
@@ -164,27 +213,34 @@ namespace Tip {
                 // printf("\n");
                 return false;
             }
-
-            if (c->cycle < yes.cycle)
+            if (tip.verbosity >= 3 && c->cycle < yes_step.cycle)
                 printf("[proveStep] clause was proved in the future: %d -> %d\n",
-                       c->cycle, yes.cycle);
+                       c->cycle, yes_step.cycle);
 
-            bool must_hold = proveInit(*c, yes_init);
+            check(proveInit(*c, yes_init));
             assert(must_hold);
+            generalize(yes_init, yes_step);
 
-            if (tip.verbosity >= 4){
-                printf("[proveStep] yes_step = ");
+#if 1
+            // Push clause forwards as much as possible:
+            ScheduledClause* dummy;
+            while (yes_step.cycle < size()-1){
+                Clause d = yes_step;
+                d.cycle++;
+                if (!step.prove(d, yes_step, dummy))
+                    break;
+                vec<Sig> xs;
+                mkUnion(yes_init, yes_step, xs);
+                yes_step = Clause(xs, yes_step.cycle);
+                printf("[proveStep] bumped c = ");
                 printClause(yes_step);
-                printf("\n");
-                printf("[proveStep] yes_init = ");
-                printClause(yes_init);
-                printf("\n");
+                printf(" (prev-cycle = %d)\n", d.cycle-1);
             }
+#endif
 
-            // Calculate union of the two strengthened clauses:
-            vec<Sig> yes_union;
-            mkUnion(yes_step, yes_init, yes_union);
-            yes = Clause(yes_union, yes_step.cycle);
+            yes = yes_step;
+            assert(proveInit(yes, yes_step));
+            assert(proveInit(yes, yes_step));
             return true;
         }
 
@@ -199,7 +255,11 @@ namespace Tip {
             if (!step.prove(c, yes_step, dummy))
                 return false;
 
-            bool must_hold = proveInit(c, yes_init);
+            if (tip.verbosity >= 3 && c.cycle < yes_step.cycle)
+                printf("[proveStep] clause was proved in the future: %d -> %d\n",
+                       c.cycle, yes_step.cycle);
+
+            check(proveInit(c, yes_init));
             assert(must_hold);
 
             // Calculate union of the two strengthened clauses:
@@ -216,7 +276,7 @@ namespace Tip {
         bool Trip::baseCase()
         {
             // Run BMC for the necessary number of initial cycles:
-            tip.bmc(0,1);
+            tip.bmc(0,2);
 
             // Check if all properties are resolved:
             for (SafeProp p = 0; p < tip.safe_props.size(); p++)
@@ -282,59 +342,75 @@ namespace Tip {
             // It was not already removed:
             assert(c->isActive());
 
-            // While removing from the last cycle, the set can not become empty:
-            assert(c->cycle < (unsigned)cycle_size.size());
-            assert(c->cycle < size()-1 || cycle_size[c->cycle] > 1);
-
-            cycle_size[c->cycle]--;
             c->deactivate();
-
-            // Assume that there was no empty set before:
-            assert(cycle_size[c->cycle] > 0 || cycle_size[c->cycle+1] > 0);
 
             if (tip.verbosity >= 3){
                 printf("[removeClause] clause removed:");
                 printClause(*c);
-                printf("(#clauses=%d at cycle %d)\n", cycle_size[c->cycle], c->cycle); 
+                if (c->cycle != cycle_Undef)
+                    printf("(#clauses=%d at cycle %d)\n", F_size[c->cycle], c->cycle);
+                else
+                    printf("(inv)\n");
             }
 
-            return cycle_size[c->cycle] == 0;
+            if (c->cycle == cycle_Undef){
+                n_inv--;
+                return false;
+            }
+
+            // While removing from the last cycle, the set can not become empty:
+            assert(c->cycle < (unsigned)size());
+            assert(c->cycle < size()-1 || F_size[c->cycle] > 1);
+
+            F_size[c->cycle]--;
+            c->deactivate();
+
+            // Assume that there was no empty set before:
+            assert(F_size[c->cycle] > 0 || F_size[c->cycle+1] > 0);
+
+            return F_size[c->cycle] == 0;
         }
 
-        unsigned Trip::size() const { return cycle_size.size(); }
+        unsigned Trip::size() const { assert(F.size() == F_size.size()); return F.size(); }
 
 
         bool Trip::addClause(const Clause& c_)
         {
-            proved.push(new Clause(c_));
-            Clause& c = *proved.last();
-
-            // FIXME: how to handle these two cases?
-            if (c.cycle == cycle_Undef || c.cycle == size())
-                c.cycle = size()-1;
-            else if (c.cycle > size())
-                assert(false);
-
+            unsigned cycle = c_.cycle;
+            if (c_.cycle != cycle_Undef){
+                assert(cycle <= size());
+                // Clause that hold up-to and including 'cycle':
+                // FIXME: how to handle the case when 'cycle == size()'
+                if (cycle == size())
+                    cycle--;
+                F[cycle].push(new Clause(c_));
+                F_size[cycle]++;
+                F[cycle].last()->cycle = cycle;
+            }else{
+                // Invariant clause:
+                F_inv.push(new Clause(c_));
+                n_inv++;
+            }
+            Clause& c = cycle != cycle_Undef ? *F[cycle].last() : *F_inv.last();
+            assert(c.size() > 0);
             assert(!fwdSubsumed(&c_));
-
-            cycle_size[c.cycle]++;
 
             if (tip.verbosity >= 3){
                 printf("[addClause] clause proved:");
                 printClause(c);
-                printf("(#clauses=%d at cycle %d)\n", cycle_size[c.cycle], c.cycle); 
+                if (c.cycle != cycle_Undef)
+                    printf("(#clauses=%d at cycle %d)\n", F_size[c.cycle], c.cycle);
+                else
+                    printf("(inv)\n");
             }
 
-            if (c.cycle == size()-1){
-                if (tip.verbosity >= 4) printf("[addClause] adding to prop-instance.\n");
-                prop.addClause(c);
-            }
+            prop.addClause(c);
             step.addClause(c);
 
             // Attach to backward subsumption index:
             for (unsigned i = 0; i < c.size(); i++){
                 bwd_occurs.growTo(c[i]);
-                bwd_occurs[c[i]].push(proved.last());
+                bwd_occurs[c[i]].push(&c);
             }
 
             // Attach to forward subsumption index:
@@ -349,9 +425,9 @@ namespace Tip {
                 }
             }
             fwd_occurs.growTo(c[min_index]);
-            fwd_occurs[c[min_index]].push(proved.last());
+            fwd_occurs[c[min_index]].push(&c);
 
-            return bwdSubsume(proved.last());
+            return bwdSubsume(&c);
         }
         
 
@@ -382,9 +458,10 @@ namespace Tip {
         
         void Trip::verifySubsumption()
         {
-            for (int i = 0; i < proved.size(); i++)
-                if (proved[i]->isActive())
-                    bwdSubsume(proved[i], true);
+            for (int i = 0; i < F.size(); i++)
+                for (int j = 0; j < F[i].size(); j++)
+                    if (F[i][j]->isActive())
+                        bwdSubsume(F[i][j], true);
         }
 
 
@@ -436,11 +513,9 @@ namespace Tip {
 
         void Trip::extractInvariant(vec<Clause>& inv)
         {
-            vec<vec<Clause*> > F; clausesByCycle(F);
             Clause c;
-
-            for (int i = 0; i < cycle_size.size(); i++)
-                if (cycle_size[i] == 0){
+            for (int i = 0; i < F.size(); i++)
+                if (F_size[i] == 0){
                     assert((unsigned)i < size()-1);
                     for (unsigned j = i+1; j < size(); j++)
                         for (int k = 0; k < F[j].size(); k++)
@@ -457,13 +532,12 @@ namespace Tip {
 
         bool Trip::pushClauses()
         {
-            vec<vec<Clause*> > F; clausesByCycle(F);
             Clause c,d;
             assert(F.size() > 0);
 
-            // Somewhat weir special case that currently needs to be taken care of:
-            for (int i = 0; i < cycle_size.size()-1; i++)
-                if (cycle_size[i] == 0)
+            // Somewhat weird special case that currently needs to be taken care of:
+            for (int i = 0; i < F_size.size()-1; i++)
+                if (F_size[i] == 0)
                     return true;
 
             // TMP: check that no subsumptions were missed.
@@ -482,10 +556,11 @@ namespace Tip {
                                 printClause(d);
                                 printf("\n"); }
                             
-                            // FIXME: also add this clause to 'F'!
+                            //printf("(#F[%d]=%d,#F[%d]=%d)", F[i][j]->cycle, F_size[F[i][j]->cycle], d.cycle, F_size[d.cycle]);
                             if (addClause(d))
                                 return true;
                             // NOTE: the clause F[i][j] will be removed by backward subsumption.
+                            //printf(" => (#F[%d]=%d,#F[%d]=%d)\n", F[i][j]->cycle, F_size[F[i][j]->cycle], d.cycle, F_size[d.cycle]);
                         }
                     }
 
@@ -523,8 +598,7 @@ namespace Tip {
                 if (sc->cycle == 0){
                     // Handle initial cycle:
                     if (proveInit(sc, minimized, pred)){
-                        bool must_hold = !addClause(minimized);
-                        assert(must_hold);
+                        check(!addClause(minimized));
                         sc->cycle = minimized.cycle+1;
                         if (sc->cycle < size())
                             enqueueClause(sc);
@@ -577,9 +651,11 @@ namespace Tip {
                             printf("[decideCycle] cycle=%d, property=%d\n", size(), p);
                         lbool res = propagate(pred, p);
                         if (res != l_Undef){
-                            if (res == l_True)
+                            if (res == l_True){
                                 // Not sure how likely this is. Check!
                                 tip.safe_props[p].stat = pstat_Proved;
+                                printf("[decideCycle] bad terminate.\n");
+                            }
                             goto next_prop;
                         }
                         printStats(false);
@@ -595,10 +671,12 @@ namespace Tip {
 
             // At this point we know that all properties are implied in cycle k+1. Expand a new frame and push
             // clauses forward as much as possible:
-            cycle_size.push(0);
+            F.push();
+            F_size.push(0);
             prop.clearClauses();
 
             if (pushClauses()){
+                printStats();
                 // All remaining properties proved:
                 for (SafeProp p = 0; p < tip.safe_props.size(); p++)
                     if (tip.safe_props[p].stat == pstat_Unknown)
@@ -619,10 +697,10 @@ namespace Tip {
 
         void Trip::printStats(bool newline)
         {
-            vec<vec<Clause*> > F; clausesByCycle(F);
             printf("%d: ", size());
             for (int i = 0; i < F.size(); i++)
-                printf("%d ", F[i].size());
+                printf("%d ", F_size[i]);
+            printf("(%d)", n_inv);
             printf(newline ? "\n" : "\r");
         }
 
@@ -631,40 +709,6 @@ namespace Tip {
         {
             Tip::printClause(tip, c);
         }
-
-
-
-        void Trip::clausesByCycle(vec<vec<Clause*> >& out)
-        {
-            out.clear();
-            out.growTo(cycle_size.size());
-            for (int i = 0; i < proved.size(); i++){
-                // if (tip.verbosity >= 4){
-                //     printf("[clausesByCycle]: proved[%d] =", i);
-                //     printClause(*proved[i]);
-                //     printf(" (%s)\n", proved[i]->isActive() ? "active" : "inactive");
-                // }
-                if (proved[i]->isActive()){
-                    out.growTo(proved[i]->cycle+1);
-                    out[proved[i]->cycle].push(proved[i]);
-                }
-            }
-
-            // printf("[clausesByCycle] cycle_size = ");
-            // for (int i = 0; i < cycle_size.size(); i++)
-            //     printf("%d ", cycle_size[i]);
-            // printf("\n");
-            // 
-            // printf("[clausesByCycle] out        = ");
-            // for (int i = 0; i < out.size(); i++)
-            //     printf("%d ", out[i].size());
-            // printf("\n");
-
-            for (int i = 0; i < cycle_size.size(); i++){
-                assert(cycle_size[i] == (unsigned)out[i].size());
-            }
-        }
-
     };
 
 

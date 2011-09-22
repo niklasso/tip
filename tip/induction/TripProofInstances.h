@@ -69,8 +69,8 @@ namespace Tip {
 
     //===================================================================================================
     class PropInstance {
-        const TipCirc&      tip;
-        const vec<Clause*>& proved;
+        const TipCirc&            tip;
+        const vec<vec<Clause*> >& F;
         
         SimpSolver*         solver;
         GMap<Lit>           umapl[2];
@@ -84,7 +84,7 @@ namespace Tip {
         void clearClauses();
         void addClause   (const Clause& c);
         
-        PropInstance(const TipCirc& t, const vec<Clause*>& pr);
+        PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_);
         ~PropInstance();
         
         bool prove(Sig p, ScheduledClause*& no, unsigned cycle);
@@ -93,8 +93,8 @@ namespace Tip {
 
     //===================================================================================================
     class StepInstance {
-        const TipCirc&      tip;
-        const vec<Clause*>& proved;
+        const TipCirc&            tip;
+        const vec<vec<Clause*> >& F;
         
         SimpSolver*    solver;
         GMap<Lit>      umapl;
@@ -108,7 +108,7 @@ namespace Tip {
     public:
         void addClause(const Clause& c);
 
-        StepInstance(const TipCirc& t, const vec<Clause*>& pr);
+        StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_);
         ~StepInstance();
         
         bool prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next = NULL);

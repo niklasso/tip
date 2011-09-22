@@ -134,6 +134,7 @@ namespace Tip {
         return true;
     }
 
+
     inline void printClause(const TipCirc& tip, const Clause& c)
     {
         printf("{ ");
@@ -148,9 +149,19 @@ namespace Tip {
                 assert(false);
             printf("%d", tip.main.number(gate(c[i])));
         }
-        printf(" }@%d", c.cycle);
+        if (c.cycle == cycle_Undef)
+            printf(" }@inv");
+        else
+            printf(" }@%d", c.cycle);
     }
-    
+
+
+    // TODO: move this to some more general place?
+#ifdef NDEBUG
+#define check(x) x
+#else
+#define check(x) assert(x)
+#endif
     
 //=================================================================================================
 } // namespace Tip
