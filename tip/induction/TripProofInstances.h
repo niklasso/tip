@@ -87,7 +87,7 @@ namespace Tip {
         PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_);
         ~PropInstance();
         
-        bool prove(Sig p, ScheduledClause*& no, unsigned cycle);
+        lbool prove(Sig p, ScheduledClause*& no, unsigned cycle);
     };
 
 

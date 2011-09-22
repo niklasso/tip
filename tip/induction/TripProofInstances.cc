@@ -492,7 +492,7 @@ namespace Tip {
     }
 
 
-    bool PropInstance::prove(Sig p, ScheduledClause*& no, unsigned cycle)
+    lbool PropInstance::prove(Sig p, ScheduledClause*& no, unsigned cycle)
     {
         //tip.printCirc();
         //printf("p = "); printSig(p); printf("\n");
@@ -534,9 +534,12 @@ namespace Tip {
             //printf("[PropInstance::prove] last = %p, pred = %p\n", last, pred);
             no = pred;
 
-            return false;
-        }else
-            return true;
+            return l_False;
+        }else if (!solver->solve(~l))
+            // Property is implied already by invariants:
+            return l_True;
+        else
+            return l_Undef;
     }
 
     PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
