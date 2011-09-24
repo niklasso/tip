@@ -19,6 +19,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Tip_TripProofInstances_h
 #define Tip_TripProofInstances_h
 
+#include "minisat/simp/SimpSolver.h"
+#include "mcl/Clausify.h"
+#include "tip/unroll/Unroll.h"
 #include "tip/induction/TripTypes.h"
 
 namespace Tip {
@@ -64,6 +67,8 @@ namespace Tip {
         ~InitInstance();
         
         bool prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next = NULL);
+
+        void printStats();
     };
 
 
@@ -88,6 +93,8 @@ namespace Tip {
         ~PropInstance();
         
         lbool prove(Sig p, ScheduledClause*& no, unsigned cycle);
+
+        void printStats();
     };
 
 
@@ -101,6 +108,7 @@ namespace Tip {
         vec<Lit>       inputs;
         vec<Lit>       outputs;
         vec<Lit>       activate;
+        vec<unsigned>  cycle_clauses;
         
         void reset();
         void evaluate(const InstanceModel& model, vec<Sig>& clause);
@@ -108,10 +116,14 @@ namespace Tip {
     public:
         void addClause(const Clause& c);
 
+        void resetCycle(unsigned cycle, unsigned num_clauses);
+
         StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_);
         ~StepInstance();
         
         bool prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next = NULL);
+
+        void printStats();
     };
     
 //=================================================================================================

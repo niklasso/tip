@@ -146,9 +146,40 @@ namespace Tip {
             s.addClause(clause);
 
             xs.push(trigg);
-            check(!s.solve(xs));
+
+            // check(!s.solve(xs));
+            bool apa = !s.solve(xs);
+            if (!apa){
+                printf("OUCH!\n");
+                printf("top = ");
+                for (int i = 0; i < top.size(); i++){
+                    lbool v = s.modelValue(top[i]);
+                    printf("%s%d=%c ", sign(top[i])?"-":"", var(top[i]),
+                           v == l_False ? '0' : v == l_True ? '1' : 'x');
+                }
+                printf("\n");
+                printf("xs = ");
+                for (int i = 0; i < xs.size(); i++){
+                    lbool v = s.modelValue(xs[i]);
+                    printf("%s%d=%c ", sign(xs[i])?"-":"", var(xs[i]),
+                           v == l_False ? '0' : v == l_True ? '1' : 'x');
+                }
+                printf("\n");
+
+                printf("clause = ");
+                for (int i = 0; i < clause.size(); i++){
+                    lbool v = s.modelValue(clause[i]);
+                    printf("%s%d=%c ", sign(clause[i])?"-":"", var(clause[i]),
+                           v == l_False ? '0' : v == l_True ? '1' : 'x');
+                }
+
+                printf("\n");
+
+                exit(217); }
+
             xs.pop();
-            s.addClause(~trigg);
+            //s.addClause(~trigg);
+            s.releaseVar(~trigg);
 
             // Check 's.conflict' and remove literals not present there:
             int i,j;
@@ -225,6 +256,10 @@ namespace Tip {
         extractFlopOuts   (tip, umap[1], cl, *solver, umapl[1], inputs);
 
         // Simplify CNF:
+#if 0
+        solver->use_asymm = true;
+        solver->grow = 2;
+#endif
         solver->eliminate(true);
         solver->thaw();
     }
@@ -279,7 +314,7 @@ namespace Tip {
             // Minimize reason more:
             int n_before = solver->conflict.size();
             shrinkConflict(*solver);
-            if (tip.verbosity >= 1 && solver->conflict.size() < n_before)
+            if (tip.verbosity >= 3 && solver->conflict.size() < n_before)
                 printf("[InitInstance::prove] expensive conflict shrink: %d => %d\n",
                        n_before, solver->conflict.size());
 
@@ -336,11 +371,19 @@ namespace Tip {
 
     InitInstance::~InitInstance(){ delete solver; }
 
+    void InitInstance::printStats()
+    {
+        printf("[init-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
+               (double)solver->nVars(), (double)solver->nClauses(), (double)solver->conflicts);
+    }
+    
     //===================================================================================================
     // Implementation of PropInstance:
 
-    void PropInstance::clearClauses(){ 
-        solver->addClause(~trigg);
+    void PropInstance::clearClauses()
+    {
+        //solver->addClause(~trigg);
+        solver->releaseVar(~trigg);
         trigg = mkLit(solver->newVar());
     }
 
@@ -551,6 +594,12 @@ namespace Tip {
 
     PropInstance::~PropInstance(){ delete solver; }
 
+    void PropInstance::printStats()
+    {
+        printf("[prop-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
+               (double)solver->nVars(), (double)solver->nClauses(), (double)solver->conflicts);
+    }
+
     //===================================================================================================
     // Implementation of StepInstance:
 
@@ -565,11 +614,37 @@ namespace Tip {
             if (activate[c.cycle] == lit_Undef)
                 activate[c.cycle] = mkLit(solver->newVar());
             xs.push(~activate[c.cycle]);
+
+            cycle_clauses.growTo(c.cycle+1, 0);
+            cycle_clauses[c.cycle]++;
         }
 
         for (unsigned i = 0; i < c.size(); i++)
             xs.push(umapl[gate(c[i])] ^ sign(c[i]));
         solver->addClause(xs);
+    }
+
+
+    void StepInstance::resetCycle(unsigned cycle, unsigned num_clauses)
+    {
+        assert(cycle != cycle_Undef);
+        if ((int)cycle < cycle_clauses.size() && (cycle_clauses[cycle] / 2) > num_clauses){
+            // Disable all clauses added to this cycle:
+            //solver->addClause(~activate[cycle]);
+            solver->releaseVar(~activate[cycle]);
+            cycle_clauses[cycle] = 0;
+
+            // Introduce new trigger literal:
+            activate[cycle] = mkLit(solver->newVar());
+
+            // Re-add all clauses from this cycle:
+            for (int i = 0; i < F[cycle].size(); i++)
+                if (F[cycle][i]->isActive())
+                    addClause(*F[cycle][i]);
+
+            // Force a solver simplify:
+            solver->simplify();
+        }
     }
 
 
@@ -643,9 +718,9 @@ namespace Tip {
                 }
 
         // These clauses must be satisfiable:
-        assert(solver->solve(assumes));
+        // assert(solver->solve(assumes));
 
-        // Assume negation of clause 'c':
+        // Assume negation of clause 'c' (outgoing):
         for (unsigned i = 0; i < c.size(); i++){
             Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
             Lit l = umapl[gate(x)] ^ sign(x);
@@ -654,8 +729,45 @@ namespace Tip {
             assumes.push(~l);
         }
 
-        // TODO: also assume the clause itself!
-        if (solver->solve(assumes)){
+        // Try to satisfy clause 'c' (incoming):
+        vec<Lit> cls;
+        for (unsigned i = 0; i < c.size(); i++){
+            Lit l = umapl[gate(c[i])] ^ sign(c[i]);
+            assert(l != lit_Undef);
+            solver->setPolarity(var(l), lbool(!sign(l)));
+            cls.push(l);
+        }
+
+        bool sat = solver->solve(assumes);
+
+        // Undo polarity preference:
+        for (int i = 0; i < cls.size(); i++)
+            solver->setPolarity(var(cls[i]), l_Undef);
+
+        if (sat){
+            // Check if incoming clause was satisfied:
+            bool clause_sat = false;
+            for (int i = 0; i < cls.size() && !clause_sat; i++)
+                if (solver->modelValue(cls[i]) == l_True)
+                    clause_sat = true;
+
+            if (!clause_sat){
+                // Look for a new model where the clause is guaranteed to be true:
+                Lit trigg = mkLit(solver->newVar());
+                cls.push(~trigg);
+                solver->addClause(cls);
+                assumes.push(trigg);
+                sat = solver->solve(assumes);
+                //solver->addClause(~trigg);
+                solver->releaseVar(~trigg);
+                // printf("[StepInstance::prove] needed to add induction hypothesis => sat=%d\n", sat);
+            }else{
+                // printf("[StepInstance::prove] did NOT need to add induction hypothesis.\n");
+            }
+        }
+
+        bool result;
+        if (sat){
             // Found a counter-example:
             if (next != NULL){
                 InstanceModel model(inputs, *solver);
@@ -687,7 +799,7 @@ namespace Tip {
 
             }
 
-            return false;
+            result = false;
         }else{
             // Proved the clause:
             vec<Sig> subset;
@@ -710,8 +822,10 @@ namespace Tip {
             // printf("[StepInstance::prove] c.cycle = %d, k = %d\n", c.cycle, k);
             yes = Clause(subset, k);
             //printf("[StepInstance::prove] &yes = %p\n", &yes);
-            return true;
+            result = true;
         }
+
+        return result;
     }
 
     StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
@@ -724,6 +838,11 @@ namespace Tip {
     StepInstance::~StepInstance(){ delete solver; }
 
 
+    void StepInstance::printStats()
+    {
+        printf("[step-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
+               (double)solver->nVars(), (double)solver->nClauses(), (double)solver->conflicts);
+    }
 
 
 //=================================================================================================

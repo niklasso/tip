@@ -16,11 +16,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#include "minisat/simp/SimpSolver.h"
 #include "minisat/mtl/Alg.h"
 #include "minisat/mtl/Sort.h"
-#include "mcl/Clausify.h"
-#include "tip/unroll/Unroll.h"
+#include "minisat/utils/System.h"
 #include "tip/induction/Induction.h"
 #include "tip/induction/TripTypes.h"
 #include "tip/induction/TripProofInstances.h"
@@ -56,7 +54,8 @@ namespace Tip {
             vec<vec<Clause*> >   F;             // Proved clauses (by cycle).
             vec<unsigned>        F_size;        // Number of active clauses in each cycle.
             vec<Clause*>         F_inv;         // Invariant clauses.
-            unsigned             n_inv;         // Number of active invariants;
+            unsigned             n_inv;         // Number of active invariants.
+            unsigned             n_total;       // Total number of active clauses.
 
             vec<vec<ScheduledClause*> > 
                                  clause_queue;
@@ -90,7 +89,7 @@ namespace Tip {
 
             // Prove scheduled clause "recursively". Returns true if the clause was proved, and
             // false if it was falsified.
-            bool            propagate    (ScheduledClause* sc, SafeProp p);
+            bool             propagate(ScheduledClause* sc, SafeProp p);
 
             // Try to push clauses forwards, particularily push clauses forward into the newly opened last
             // frame. Returns true if an invariant is found and false otherwise.
@@ -107,6 +106,8 @@ namespace Tip {
             // Remove a proved clause 'c'. Returns true if this causes an invariant to be found,
             // and false otherwise.
             bool             removeClause (Clause* c);
+
+            void             clearInactive();
 
             // Check if clause 'c' is subsumed by any previously proved clause. Returns true if it is and
             // false otherwise.
@@ -136,7 +137,7 @@ namespace Tip {
             void             printInvariant  ();
             void             verifyInvariant ();
 
-            Trip(TipCirc& t) : tip(t), n_inv(0), init(t), prop(t, F), step(t, F)
+            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), init(t), prop(t, F), step(t, F)
             {
                 F.push();
                 F_size.push(0);
@@ -150,7 +151,7 @@ namespace Tip {
             // are resolved (i.e. all properties were falsifiable), and false otherwise.
             bool baseCase();
 
-            void printStats(bool newline = true);
+            void printStats(unsigned curr_cycle = cycle_Undef, bool newline = true);
         };
 
         bool Trip::proveInit(const ScheduledClause* c, Clause& yes, ScheduledClause*& no){ 
@@ -224,7 +225,13 @@ namespace Tip {
                        c->cycle, yes_step.cycle);
 
             check(proveInit(*c, yes_init));
+#if 1
             generalize(yes_init, yes_step);
+#else
+            vec<Sig> xs;
+            mkUnion(yes_init, yes_step, xs);
+            yes_step = Clause(xs, yes_step.cycle);
+#endif
 
 #if 1
             // Push clause forwards as much as possible:
@@ -244,8 +251,8 @@ namespace Tip {
 #endif
 
             yes = yes_step;
-            assert(proveInit(yes, yes_step));
-            assert(proveInit(yes, yes_step));
+            // TODO: assert something based on subsumtion instead.
+            // assert(proveInit(yes, yes_step));
             return true;
         }
 
@@ -341,6 +348,40 @@ namespace Tip {
         }
 
 
+        void Trip::clearInactive()
+        {
+            // Remove all references to inactive clauses:
+            for (GateIt git = tip.main.begin(); git != tip.main.end(); ++git)
+                for (unsigned s = 0; s < 2; s++)
+                    for (unsigned bwd = 0; bwd < 2; bwd++){
+                        Sig x = mkSig(*git, s);
+                        SMap<vec<Clause*> >& occ = bwd ? bwd_occurs : fwd_occurs;
+                        if (!occ.has(x))
+                            continue;
+
+                        int i,j;
+                        for (i = j = 0; i < occ[x].size(); i++)
+                            if (occ[x][i]->isActive())
+                                occ[x][j++] = occ[x][i];
+                        occ[x].shrink(i - j);
+                    }
+            
+            // Delete inactive clauses:
+            int n_removed = 0;
+            for (int k = 0; k < F.size(); k++){
+                int i,j;
+                for (i = j = 0; i < F[k].size(); i++)
+                    if (F[k][i]->isActive())
+                        F[k][j++] = F[k][i];
+                    else
+                        n_removed++, delete F[k][i];
+                F[k].shrink(i - j);
+            }
+            if (tip.verbosity >= 2)
+                printf("[clearInactive] removed %d inactive clauses\n", n_removed);
+        }
+
+
         bool Trip::removeClause(Clause* c)
         {
             // It was not already removed:
@@ -361,6 +402,8 @@ namespace Tip {
                 n_inv--;
                 return false;
             }
+            n_total--;
+            step.resetCycle(c->cycle, F_size[c->cycle]);
 
             // While removing from the last cycle, the set can not become empty:
             assert(c->cycle < (unsigned)size());
@@ -401,6 +444,7 @@ namespace Tip {
             Clause& c = cycle != cycle_Undef ? *F[cycle].last() : *F_inv.last();
             assert(c.size() > 0);
             assert(!fwdSubsumed(&c_));
+            n_total++;
 
             if (tip.verbosity >= 3){
                 printf("[addClause] clause proved:");
@@ -438,6 +482,9 @@ namespace Tip {
         }
 
 
+        // FIXME: it can happen that the last cycle becoming empty triggers this, and no invariant
+        // can be extracted. Should we just let that happen maybe? It does not seem like an error.
+
         // There is some cycles i,j such that i < j, F[i] == 0 and F[j] > 0. Then the invariant is
         // equal to the union of F[l] for l such that i < l < size().
         void Trip::extractInvariant()
@@ -459,6 +506,7 @@ namespace Tip {
             
                     // Check that the invariant is non-empty:
                     assert(inv_size > 0);
+
                     return;
                 }
 
@@ -556,6 +604,8 @@ namespace Tip {
             Clause c,d;
             assert(F.size() > 0);
 
+            clearInactive();
+
             // Somewhat weird special case that currently needs to be taken care of:
             for (int i = 0; i < F_size.size()-1; i++)
                 if (F_size[i] == 0)
@@ -598,7 +648,6 @@ namespace Tip {
         bool Trip::propagate(ScheduledClause* sc, SafeProp p)
         {
             enqueueClause(sc);
-
             for (;;){
                 // if (tip.verbosity >= 2) printf("[propagate] property = %d\n", p);
 
@@ -621,9 +670,13 @@ namespace Tip {
                 ScheduledClause* pred;
                 Clause           minimized;
 
+                static unsigned iters = 0;
+
                 if (sc->cycle == 0){
                     // Handle initial cycle:
                     if (proveInit(sc, minimized, pred)){
+                        if ((iters++ % 10) == 0) printStats(sc->cycle, false);
+
                         // Note: adding a clause to cycle zero should leave at least one left after
                         // potential subsumptions.
                         check(!addClause(minimized));
@@ -632,6 +685,7 @@ namespace Tip {
                             enqueueClause(sc);
                         else
                             delete sc;
+
                     }else{
                         Trace             cex    = tip.newTrace();
                         vec<vec<lbool> >& frames = tip.traces[cex].frames;
@@ -647,6 +701,7 @@ namespace Tip {
                 }else{
                     // Handle arbitrary non-initial cycle:
                     if (proveStep(sc, minimized, pred)){
+                        if ((iters++ % 10) == 0) printStats(sc->cycle, false);
                         // TODO: plug memory leak of scheduled clauses if invariant is found.
                         if (addClause(minimized)){
                             // FIXME: reference counting?
@@ -690,7 +745,6 @@ namespace Tip {
                             // Done with 'p' for this cycle:
                             unresolved++;
                         }
-                        printStats(true);
                     }while (prop_res == l_False);
                 }
 
@@ -717,13 +771,21 @@ namespace Tip {
         }
 
 
-        void Trip::printStats(bool newline)
+        void Trip::printStats(unsigned curr_cycle, bool newline)
         {
-            printf("%d: ", size());
-            for (int i = 0; i < F.size(); i++)
-                printf("%d ", F_size[i]);
-            printf("(%d)", n_inv);
-            printf(newline ? "\n" : "\r");
+            if (tip.verbosity >= 2){
+                printf("[trip-stats] #clauses=%d, depth=%d\n", n_total, size());
+                init.printStats();
+                prop.printStats();
+                step.printStats();
+            }
+            printf("%d:", size());
+            for (int i = 0; i < F.size(); i++){
+                printf("%c%d", i == (int)curr_cycle ? '*' : ' ', F_size[i]);
+            }
+            printf(" (%d)", n_inv);
+            printf(newline || tip.verbosity >= 2 ? "\n" : "\r");
+            fflush(stdout);
         }
 
 
@@ -736,7 +798,8 @@ namespace Tip {
 
     void relativeInduction(TipCirc& tip)
     {
-        Trip trip(tip);
+        double time_before = cpuTime();
+        Trip   trip(tip);
 
         if (!trip.baseCase())
             while (!trip.decideCycle())
@@ -751,6 +814,9 @@ namespace Tip {
                     break;
                 }
         }
+
+        if (tip.verbosity >= 1)
+            printf("CPU Time: %6.2f s\n", cpuTime() - time_before);
     }
 
 
