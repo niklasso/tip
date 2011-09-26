@@ -76,7 +76,10 @@ namespace Tip {
             // PROVE:   let k = c.cycle: F_inv ^ F[k-1] ^ c ^ Trans => c'
             // RETURNS: True and a stronger clause d (subset of c) that holds in some cycle >= k,
             //       or False and a new clause predecessor to be proved in cycle k-1.
+
             bool             proveStep(const ScheduledClause* c, Clause& yes, ScheduledClause*& no);
+            lbool            proveAndGeneralize(const ScheduledClause* c, Clause& yes, ScheduledClause*& no);
+
             bool             proveStep(const Clause& c, Clause& yes);
 
             void             generalize(const Clause& init, Clause& c);
@@ -207,31 +210,32 @@ namespace Tip {
         }
 
 
-        bool Trip::proveStep(const ScheduledClause* c, Clause& yes, ScheduledClause*& no)
+        lbool Trip::proveAndGeneralize(const ScheduledClause* c, Clause& yes, ScheduledClause*& no)
         {
-            Clause yes_step;
-            Clause yes_init;
-
-            if (!step.prove(*c, yes_step, no, c)){
-                // printf("[proveStep] no = ");
-                // printClause(*no);
-                // printf("\n");
-                return false;
+            Clause yes_init, yes_step;
+            if (c->cycle == 0){
+                if (!init.prove(*c, yes_init, no, c)){
+                    return l_False;
+                }
+                yes_step = yes_init;
+            }else{
+                if (!step.prove(*c, yes_step, no, c))
+                    return l_Undef;
+                
+                check(proveInit(*c, yes_init));
+#if 1
+                generalize(yes_init, yes_step);
+#else
+                vec<Sig> xs;
+                mkUnion(yes_init, yes_step, xs);
+                yes_step = Clause(xs, yes_step.cycle);
+#endif
             }
+
             if (tip.verbosity >= 3 && c->cycle < yes_step.cycle)
                 printf("[proveStep] clause was proved in the future: %d -> %d\n",
                        c->cycle, yes_step.cycle);
 
-            check(proveInit(*c, yes_init));
-#if 1
-            generalize(yes_init, yes_step);
-#else
-            vec<Sig> xs;
-            mkUnion(yes_init, yes_step, xs);
-            yes_step = Clause(xs, yes_step.cycle);
-#endif
-
-#if 1
             // Push clause forwards as much as possible:
             while (yes_step.cycle < size()-1){
                 Clause d = yes_step;
@@ -241,16 +245,16 @@ namespace Tip {
                 vec<Sig> xs;
                 mkUnion(yes_init, yes_step, xs);
                 yes_step = Clause(xs, yes_step.cycle);
-                // printf("[proveStep] bumped c = ");
-                // printClause(yes_step);
-                // printf(" (prev-cycle = %d)\n", d.cycle-1);
             }
+
+#if 0
+            generalize(yes_init, yes_step);
 #endif
 
             yes = yes_step;
             // TODO: assert something based on subsumtion instead.
             // assert(proveInit(yes, yes_step));
-            return true;
+            return l_True;
         }
 
 
@@ -667,52 +671,33 @@ namespace Tip {
 
                 static unsigned iters = 0;
 
-                if (sc->cycle == 0){
-                    // Handle initial cycle:
-                    if (proveInit(sc, minimized, pred)){
-                        if ((iters++ % 10) == 0) printStats(sc->cycle, false);
-
-                        // Note: adding a clause to cycle zero should leave at least one left after
-                        // potential subsumptions.
-                        check(!addClause(minimized));
+                lbool result = proveAndGeneralize(sc, minimized, pred);
+                if (result == l_True){
+                    if ((iters++ % 10) == 0) printStats(sc->cycle, false);
+                    // TODO: plug memory leak of scheduled clauses if invariant is found.
+                    if (addClause(minimized)){
+                        // FIXME: reference counting?
+                        // delete sc;
+                        extractInvariant();
+                    }else if (minimized.cycle != cycle_Undef && minimized.cycle+1 < size()){
                         sc->cycle = minimized.cycle+1;
-                        if (sc->cycle < size())
-                            enqueueClause(sc);
-                        else
-                            delete sc;
-
-                    }else{
-                        Trace             cex    = tip.newTrace();
-                        vec<vec<lbool> >& frames = tip.traces[cex].frames;
-                        extractTrace(pred, frames);
-                        tip.safe_props[p].stat   = pstat_Falsified;
-                        tip.safe_props[p].cex    = cex;
-                        delete sc;
-                        delete pred;
-
-                        return false;
-                    }
-
-                }else{
-                    // Handle arbitrary non-initial cycle:
-                    if (proveStep(sc, minimized, pred)){
-                        if ((iters++ % 10) == 0) printStats(sc->cycle, false);
-                        // TODO: plug memory leak of scheduled clauses if invariant is found.
-                        if (addClause(minimized)){
-                            // FIXME: reference counting?
-                            // delete sc;
-                            extractInvariant();
-                        }else if (minimized.cycle != cycle_Undef && minimized.cycle+1 < size()){
-                            sc->cycle = minimized.cycle+1;
-                            enqueueClause(sc);
-                        }else
-                            ;
-                            // FIXME: reference counting?
-                            // delete sc;
-                    }else{
-                        enqueueClause(pred);
                         enqueueClause(sc);
-                    }
+                    }else
+                        ;
+                    // FIXME: reference counting?
+                    // delete sc;
+                }else if (result == l_False){
+                    Trace             cex    = tip.newTrace();
+                    vec<vec<lbool> >& frames = tip.traces[cex].frames;
+                    extractTrace(pred, frames);
+                    tip.safe_props[p].stat   = pstat_Falsified;
+                    tip.safe_props[p].cex    = cex;
+                    delete sc;
+                    delete pred;
+                    return false;
+                }else{
+                    enqueueClause(pred);
+                    enqueueClause(sc);
                 }
             }
 
