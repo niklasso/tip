@@ -124,15 +124,10 @@ namespace Tip {
         }
 
 
-        // Minimize set of 'xs' that falsifies one of 'top':
-        void shrinkModelOnce(SimpSolver& s, vec<Lit>& xs, const vec<Lit>& top)
+        void shrinkModelOnce(SimpSolver& s, LitSet& xs, const vec<Lit>& top)
         {
-            //printf(" ... xs-in: {");
-            for (int i = 0; i < xs.size(); i++){
+            for (int i = 0; i < xs.size(); i++)
                 assert(s.modelValue(xs[i]) == l_True);
-                //printf("%s%d ", sign(xs[i])?"-":"", var(xs[i]));
-            }
-            //printf("}\n");
 
             for (int i = 0; i < top.size(); i++)
                 assert(s.modelValue(top[i]) == l_True);
@@ -145,53 +140,20 @@ namespace Tip {
             clause.push(~trigg);
             s.addClause(clause);
 
-            xs.push(trigg);
+            vec<Lit> assume;
+            xs.copyTo(assume);
+            assume.push(trigg);
+            check(!s.solve(assume));
 
-            // check(!s.solve(xs));
-            bool apa = !s.solve(xs);
-            if (!apa){
-                printf("OUCH!\n");
-                printf("top = ");
-                for (int i = 0; i < top.size(); i++){
-                    lbool v = s.modelValue(top[i]);
-                    printf("%s%d=%c ", sign(top[i])?"-":"", var(top[i]),
-                           v == l_False ? '0' : v == l_True ? '1' : 'x');
-                }
-                printf("\n");
-                printf("xs = ");
-                for (int i = 0; i < xs.size(); i++){
-                    lbool v = s.modelValue(xs[i]);
-                    printf("%s%d=%c ", sign(xs[i])?"-":"", var(xs[i]),
-                           v == l_False ? '0' : v == l_True ? '1' : 'x');
-                }
-                printf("\n");
-
-                printf("clause = ");
-                for (int i = 0; i < clause.size(); i++){
-                    lbool v = s.modelValue(clause[i]);
-                    printf("%s%d=%c ", sign(clause[i])?"-":"", var(clause[i]),
-                           v == l_False ? '0' : v == l_True ? '1' : 'x');
-                }
-
-                printf("\n");
-
-                exit(217); }
-
-            xs.pop();
             //s.addClause(~trigg);
             s.releaseVar(~trigg);
 
             // Check 's.conflict' and remove literals not present there:
-            int i,j;
-            for (i = j = 0; i < xs.size(); i++)
-                if (find(s.conflict, ~xs[i]))
-                    xs[j++] = xs[i];
-            xs.shrink(i - j);
-
-            // printf(" ... xs-out: { ");
-            // for (int i = 0; i < xs.size(); i++)
-            //     printf("%s%d ", sign(xs[i])?"-":"", var(xs[i]));
-            // printf("}\n");
+            vec<Lit> out;
+            for (int i = 0; i < s.conflict.size(); i++)
+                if (xs.has(~s.conflict[i]))
+                    out.push(~s.conflict[i]);
+            xs.fromVec(out);
         }
 
 
@@ -294,9 +256,7 @@ namespace Tip {
             // Found a counter-example:
             if (next != NULL){
                 lset.fromModel(inputs, *solver);
-                vec<Lit> shrunk; lset.copyTo(shrunk);
-                shrinkModelOnce(*solver, shrunk, assumes);
-                lset.fromVec(shrunk);
+                shrinkModelOnce(*solver, lset, assumes);
 
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
@@ -546,25 +506,16 @@ namespace Tip {
         if (solver->solve(~l, trigg)){
             assert(solver->modelValue(l) == l_False);
             // Found predecessor state to a bad state:
-            lset.fromModel(inputs, *solver);
-            vec<Lit> shrunk; lset.copyTo(shrunk);
             vec<Lit> outputs;
             outputs.push(~l);
-            shrinkModelOnce(*solver, shrunk, outputs);
-            lset.fromVec(shrunk);
+            lset.fromModel(inputs, *solver);
+            shrinkModelOnce(*solver, lset, outputs);
 
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
             traceInputs(tip, lset, umapl[0], frames);
             traceInputs(tip, lset, umapl[1], frames);
             getClause  (tip, lset, umapl[0], clause);
-
-            // { // TMP-debug:
-            //     Clause d(clause, cycle);
-            //     printf("[PropInstance::prove] clause = ");
-            //     printClause(tip, d);
-            //     printf("\n");
-            // }
 
             // TODO: It is hard to specify the actual property
             // here. The SAT-based query used here is stronger than
@@ -674,6 +625,11 @@ namespace Tip {
         extractInputs  (tip, id, cl, *solver, umapl, inputs);
         extractFlopOuts(tip, id, cl, *solver, umapl, outputs);
 
+#if 0
+        solver->use_asymm = true;
+        solver->grow = 2;
+#endif
+
         // Simplify CNF:
         solver->eliminate(true);
         solver->thaw();
@@ -774,9 +730,7 @@ namespace Tip {
             // Found a counter-example:
             if (next != NULL){
                 lset.fromModel(inputs, *solver);
-                vec<Lit> shrunk; lset.copyTo(shrunk);
-                shrinkModelOnce(*solver, shrunk, outputs);
-                lset.fromVec(shrunk);
+                shrinkModelOnce(*solver, lset, outputs);
 
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
