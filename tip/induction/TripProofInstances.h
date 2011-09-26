@@ -29,7 +29,9 @@ namespace Tip {
     //===================================================================================================
     // Helper class, should maybe be internal later:
     class InstanceModel {
-        vec<Lit> inputs;
+        LMap<char> true_map;
+        vec<Lit>   inputs;
+
     public:
         InstanceModel(const vec<Lit>& inps, const SimpSolver& s)
             {
@@ -52,6 +54,48 @@ namespace Tip {
     };
 
 
+    class LitSet {
+        VMap<lbool> in_set;
+        vec<Lit>    set; // TODO: not really necessary to store literals, variables should suffice.
+
+        void clear()
+        {
+            for (int i = 0; i < set.size(); i++)
+                in_set[var(set[i])] = l_Undef;
+            set.clear();
+        }
+
+    public:
+        void fromModel(const vec<Lit>& xs, const SimpSolver& s)
+        {
+            clear();
+            in_set.reserve(s.nVars()-1, l_Undef);
+            for (int i = 0; i < xs.size(); i++){
+                assert(s.modelValue(xs[i]) != l_Undef);
+                set.push(xs[i] ^ (s.modelValue(xs[i]) == l_False));
+                in_set[var(xs[i])] = s.modelValue(xs[i]);
+            }
+        }
+
+        void fromVec(const vec<Lit>& xs)
+        {
+            clear();
+            for (int i = 0; i < xs.size(); i++){
+                set.push(xs[i]);
+                in_set.reserve(var(xs[i]), l_Undef);
+                in_set[var(xs[i])] = lbool(!sign(xs[i]));
+            }
+        }
+
+        int   size      ()       const { return set.size(); }
+        Lit   operator[](int i)  const { return set[i]; }
+        void  copyTo    (vec<Lit>& out) const { set.copyTo(out); }
+
+        lbool has(Var v) const { return in_set.has(v) ? in_set[v] : l_Undef; }
+        bool  has(Lit l) const { return in_set.has(var(l)) && (in_set[var(l)] ^ sign(l)) == l_True; }
+    };
+
+
     //===================================================================================================
     class InitInstance {
         const TipCirc& tip;
@@ -59,6 +103,7 @@ namespace Tip {
         SimpSolver*    solver;
         GMap<Lit>      umapl[2];
         vec<Lit>       inputs;
+        LitSet         lset;
         
         void reset();
         
@@ -81,9 +126,10 @@ namespace Tip {
         GMap<Lit>           umapl[2];
         vec<Lit>            inputs;
         Lit                 trigg;
+        LitSet              lset;
         
         void reset();
-        lbool evaluate(const InstanceModel& model, Sig p);
+        //lbool evaluate(const InstanceModel& model, Sig p);
 
     public:
         void clearClauses();
@@ -109,9 +155,10 @@ namespace Tip {
         vec<Lit>       outputs;
         vec<Lit>       activate;
         vec<unsigned>  cycle_clauses;
+        LitSet         lset;
         
         void reset();
-        void evaluate(const InstanceModel& model, vec<Sig>& clause);
+        void evaluate(vec<Sig>& clause);
         
     public:
         void addClause(const Clause& c);

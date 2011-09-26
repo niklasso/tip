@@ -195,34 +195,37 @@ namespace Tip {
         }
 
 
-        void traceResetInputs(const TipCirc& tip, const InstanceModel& model, const GMap<Lit>& umapl, vec<vec<lbool> >& frames)
+        void traceResetInputs(const TipCirc& tip, const LitSet& lset, const GMap<Lit>& umapl, vec<vec<lbool> >& frames)
         {
             frames.push();
             for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit){
                 Gate inp = *iit;
+                Lit  l   = umapl[inp];
                 assert(tip.init.number(inp) != UINT32_MAX); // Inputs must be numbered.
                 frames.last().growTo(tip.init.number(inp)+1, l_Undef);
-                frames.last()[tip.init.number(inp)] = model.value(inp, umapl);
+                frames.last()[tip.init.number(inp)] = lset.has(var(l)) ^ sign(l);
             }
         }
 
 
-        void traceInputs(const TipCirc& tip, const InstanceModel& model, const GMap<Lit>& umapl, vec<vec<lbool> >& frames)
+        void traceInputs(const TipCirc& tip, const LitSet& lset, const GMap<Lit>& umapl, vec<vec<lbool> >& frames)
         {
             frames.push();
             for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
                 Gate inp = *iit;
+                Lit  l   = umapl[inp];
                 assert(tip.main.number(inp) != UINT32_MAX); // Inputs must be numbered.
                 frames.last().growTo(tip.main.number(inp)+1, l_Undef);
-                frames.last()[tip.main.number(inp)] = model.value(inp, umapl);
+                frames.last()[tip.main.number(inp)] = lset.has(var(l)) ^ sign(l);
             }
         }
 
 
-        void getClause(const TipCirc& tip, const InstanceModel& model, const GMap<Lit>& umapl, vec<Sig>& xs)
+        void getClause(const TipCirc& tip, const LitSet& lset, const GMap<Lit>& umapl, vec<Sig>& xs)
         {
             for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
-                lbool val = model.value(*flit, umapl);
+                Lit   l   = umapl[*flit];
+                lbool val = lset.has(var(l)) ^ sign(l);
                 if (val != l_Undef)
                     xs.push(mkSig(*flit, val == l_True));
             }
@@ -290,15 +293,15 @@ namespace Tip {
         if (solver->solve(assumes)){
             // Found a counter-example:
             if (next != NULL){
-                InstanceModel model(inputs, *solver);
-                vec<Lit> shrunk; model.copyTo(shrunk);
+                lset.fromModel(inputs, *solver);
+                vec<Lit> shrunk; lset.copyTo(shrunk);
                 shrinkModelOnce(*solver, shrunk, assumes);
+                lset.fromVec(shrunk);
 
-                InstanceModel    shrunk_model(shrunk);
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
-                traceResetInputs(tip, shrunk_model, umapl[0], frames);
-                traceInputs     (tip, shrunk_model, umapl[1], frames);
+                traceResetInputs(tip, lset, umapl[0], frames);
+                traceInputs     (tip, lset, umapl[1], frames);
 
                 vec<Sig>         dummy;
                 ScheduledClause* pred0    = new ScheduledClause(dummy, 0, frames[1], next);
@@ -441,7 +444,8 @@ namespace Tip {
     }
 
 
-    lbool PropInstance::evaluate(const InstanceModel& model, Sig p)
+    #if 0
+    lbool PropInstance::evaluate(const LitSet& lset, Sig p)
     {
         // FIXME: yuck!
         GMap<lbool> value(tip.main.lastGate(), l_Undef);
@@ -533,29 +537,27 @@ namespace Tip {
         assert(result == l_False);
         return result;
     }
+    #endif
 
 
     lbool PropInstance::prove(Sig p, ScheduledClause*& no, unsigned cycle)
     {
-        //tip.printCirc();
-        //printf("p = "); printSig(p); printf("\n");
         Lit l = umapl[1][gate(p)] ^ sign(p);
-        //printf("l = %s%d\n", sign(l)?"-":"", var(l));
         if (solver->solve(~l, trigg)){
             assert(solver->modelValue(l) == l_False);
             // Found predecessor state to a bad state:
-            InstanceModel model(inputs, *solver);
-            vec<Lit> shrunk; model.copyTo(shrunk);
+            lset.fromModel(inputs, *solver);
+            vec<Lit> shrunk; lset.copyTo(shrunk);
             vec<Lit> outputs;
             outputs.push(~l);
             shrinkModelOnce(*solver, shrunk, outputs);
-                
-            InstanceModel    shrunk_model(shrunk);
+            lset.fromVec(shrunk);
+
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
-            traceInputs(tip, shrunk_model, umapl[0], frames);
-            traceInputs(tip, shrunk_model, umapl[1], frames);
-            getClause  (tip, shrunk_model, umapl[0], clause);
+            traceInputs(tip, lset, umapl[0], frames);
+            traceInputs(tip, lset, umapl[1], frames);
+            getClause  (tip, lset, umapl[0], clause);
 
             // { // TMP-debug:
             //     Clause d(clause, cycle);
@@ -678,13 +680,14 @@ namespace Tip {
     }
 
 
-    void StepInstance::evaluate(const InstanceModel& model, vec<Sig>& clause)
+    void StepInstance::evaluate(vec<Sig>& clause)
     {
         GMap<lbool> value(tip.main.lastGate(), l_Undef);
         for (GateIt git = tip.main.begin(); git != tip.main.end(); ++git)
-            if (type(*git) == gtype_Inp)
-                value[*git] = model.value(*git, umapl);
-            else{
+            if (type(*git) == gtype_Inp){
+                Lit l = umapl[*git];
+                value[*git] = lset.has(var(l)) ^ sign(l);
+            }else{
                 assert(type(*git) == gtype_And);
                 Sig x = tip.main.lchild(*git);
                 Sig y = tip.main.rchild(*git);
@@ -770,15 +773,15 @@ namespace Tip {
         if (sat){
             // Found a counter-example:
             if (next != NULL){
-                InstanceModel model(inputs, *solver);
-                vec<Lit> shrunk; model.copyTo(shrunk);
+                lset.fromModel(inputs, *solver);
+                vec<Lit> shrunk; lset.copyTo(shrunk);
                 shrinkModelOnce(*solver, shrunk, outputs);
+                lset.fromVec(shrunk);
 
-                InstanceModel    shrunk_model(shrunk);
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
-                traceInputs     (tip, shrunk_model, umapl, frames);
-                getClause       (tip, shrunk_model, umapl, clause);
+                traceInputs     (tip, lset, umapl, frames);
+                getClause       (tip, lset, umapl, clause);
 
                 ScheduledClause* pred = new ScheduledClause(clause, c.cycle-1, frames[0], next);
                 //printf("[StepInstance::prove] pred = %p\n", pred);
