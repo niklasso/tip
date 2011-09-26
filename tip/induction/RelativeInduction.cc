@@ -158,9 +158,8 @@ namespace Tip {
             return init.prove(*c, yes, no, c);
         }
 
-        bool Trip::proveInit(const Clause& c, Clause& yes){ 
-            ScheduledClause* dummy;
-            return init.prove(c, yes, dummy);
+        bool Trip::proveInit(const Clause& c, Clause& yes){
+            return init.prove(c, yes);
         }
 
 
@@ -168,7 +167,6 @@ namespace Tip {
         {
             vec<Sig>         try_remove;
             Clause           d,e;
-            ScheduledClause* dummy;
             vec<Sig>         xs;
 
             for (unsigned i = 0; i < c.size(); i++)
@@ -194,7 +192,7 @@ namespace Tip {
                     // printf("[generalize] e    = ");
                     // printClause(e);
                     // printf("\n");
-                    if (step.prove(e, d, dummy)){
+                    if (step.prove(e, d)){
                         mkUnion(ic, d, xs);
                         c = Clause(xs, c.cycle);
                         // printf("[generalize] c    = ");
@@ -235,11 +233,10 @@ namespace Tip {
 
 #if 1
             // Push clause forwards as much as possible:
-            ScheduledClause* dummy;
             while (yes_step.cycle < size()-1){
                 Clause d = yes_step;
                 d.cycle++;
-                if (!step.prove(d, yes_step, dummy))
+                if (!step.prove(d, yes_step))
                     break;
                 vec<Sig> xs;
                 mkUnion(yes_init, yes_step, xs);
@@ -260,11 +257,9 @@ namespace Tip {
         bool Trip::proveStep(const Clause& c, Clause& yes)
         {
             // FIXME: code duplication ...
-            Clause           yes_step;
-            Clause           yes_init;
-            ScheduledClause* dummy;
+            Clause yes_init, yes_step;
 
-            if (!step.prove(c, yes_step, dummy))
+            if (!step.prove(c, yes_step))
                 return false;
 
             if (tip.verbosity >= 3 && c.cycle < yes_step.cycle)

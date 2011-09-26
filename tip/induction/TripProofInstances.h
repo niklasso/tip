@@ -112,6 +112,7 @@ namespace Tip {
         ~InitInstance();
         
         bool prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next = NULL);
+        bool prove(const Clause& c, Clause& yes);
 
         void printStats();
     };
@@ -169,6 +170,7 @@ namespace Tip {
         ~StepInstance();
         
         bool prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next = NULL);
+        bool prove(const Clause& c, Clause& yes);
 
         void printStats();
     };

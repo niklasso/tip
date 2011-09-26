@@ -326,6 +326,13 @@ namespace Tip {
     }
 
 
+    bool InitInstance::prove(const Clause& c, Clause& yes)
+    {
+        ScheduledClause* dummy;
+        return prove(c, yes, dummy);
+    }
+
+
     InitInstance::InitInstance(const TipCirc& t) : tip(t), solver(NULL)
     {
         reset();
@@ -783,6 +790,12 @@ namespace Tip {
         }
 
         return result;
+    }
+
+    bool StepInstance::prove(const Clause& c, Clause& yes)
+    {
+        ScheduledClause* dummy;
+        return prove(c, yes, dummy);
     }
 
     StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
