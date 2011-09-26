@@ -98,6 +98,7 @@ namespace Tip {
             // for (int i = 0; i < s.conflict.size(); i++)
             //     printf("%s%d ", sign(~s.conflict[i])?"-":"", var(s.conflict[i]));
             // printf("\n");
+            s.extend_model = false;
             for (;;){
                 ass.clear();
                 for (int i = 0; i < s.conflict.size(); i++)
@@ -121,6 +122,7 @@ namespace Tip {
                 break;
             retry:;
             }
+            s.extend_model = true;
         }
 
 
@@ -252,6 +254,9 @@ namespace Tip {
             assumes.push(~l);
         }
 
+        if (next == NULL)
+            solver->extend_model = false;
+        bool result;
         if (solver->solve(assumes)){
             // Found a counter-example:
             if (next != NULL){
@@ -269,8 +274,7 @@ namespace Tip {
                 //printf("[InitInstance::prove] pred0 = %p, pred_rst = %p\n", pred0, pred_rst);
                 no = pred_rst;
             }
-
-            return false;
+            result = false;
         }else{
             // Proved the clause:
 
@@ -291,13 +295,6 @@ namespace Tip {
             }
 
             sort(slits, SigLitCmp());
-
-            // printf(" .. slits-before = ");
-            // for (int i = 0; i < slits.size(); i++)
-            //     printf("%s%d:%s%d ", 
-            //            sign(slits[i].x)?"~":"", index(gate(slits[i].x)),
-            //            sign(slits[i].l)?"~":"", var(slits[i].l));
-            // printf("\n");
             
             int i,j;
             for (i = j = 1; i < slits.size(); i++)
@@ -305,24 +302,19 @@ namespace Tip {
                     slits[j++] = slits[i];
             slits.shrink(i-j);
 
-            // if (i - j > 0)
-            //     printf("[InitInstance::prove] potential reason shrunk with: %d\n", i - j);
-            
-            // printf(" .. slits-after = ");
-            // for (int i = 0; i < slits.size(); i++)
-            //     printf("%s%d:%s%d ", 
-            //            sign(slits[i].x)?"~":"", index(gate(slits[i].x)),
-            //            sign(slits[i].l)?"~":"", var(slits[i].l));
-            // printf("\n");
+            if (tip.verbosity >= 3 && i - j > 0)
+                printf("[InitInstance::prove] potential reason shrunk with: %d\n", i - j);
 
             vec<Sig> subset;
             for (int i = 0; i < slits.size(); i++)
                 if (find(solver->conflict, slits[i].l))
                     subset.push(slits[i].x);
             yes = Clause(subset, 0);
-
-            return true;
+            result = true;
         }
+        solver->extend_model = true;
+
+        return result;
     }
 
 
@@ -704,6 +696,7 @@ namespace Tip {
             cls.push(l);
         }
 
+        if (next == NULL) solver->extend_model = false;
         bool sat = solver->solve(assumes);
 
         // Undo polarity preference:
@@ -731,6 +724,7 @@ namespace Tip {
                 // printf("[StepInstance::prove] did NOT need to add induction hypothesis.\n");
             }
         }
+        solver->extend_model = true;
 
         bool result;
         if (sat){
