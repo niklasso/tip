@@ -89,15 +89,11 @@ namespace Tip {
 
 
         // Minimize the last conflicting assumption set:
+        // TODO: can this be improved?
         void shrinkConflict(SimpSolver& s)
         {
             vec<Lit> ass;
             vec<Lit> smaller;
-            bool     must_hold;
-            // printf("[shrinkConflict] init = ");
-            // for (int i = 0; i < s.conflict.size(); i++)
-            //     printf("%s%d ", sign(~s.conflict[i])?"-":"", var(s.conflict[i]));
-            // printf("\n");
             s.extend_model = false;
             for (;;){
                 ass.clear();
@@ -109,16 +105,10 @@ namespace Tip {
                     for (int j = 0; j < ass.size(); j++)
                         if (i != j)
                             smaller.push(ass[j]);
-                    // printf("[shrinkConflict] trying to remove %s%d ", sign(ass[i])?"-":"", var(ass[i]));
-                    if (!s.solve(smaller)){
-                        // printf(" (succeeded)\n");
+                    if (!s.solve(smaller))
                         goto retry;
-                    }else{
-                        // printf(" (failed)\n");
-                    }
                 }
-                must_hold = !s.solve(ass);
-                assert(must_hold);
+                check(!s.solve(ass));
                 break;
             retry:;
             }
