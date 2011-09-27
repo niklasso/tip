@@ -197,7 +197,7 @@ namespace Tip {
                     // printf("\n");
                     if (step.prove(e, d)){
                         mkUnion(ic, d, xs);
-                        c = Clause(xs, c.cycle);
+                        c = Clause(xs, d.cycle);
                         // printf("[generalize] c    = ");
                         // printClause(c);
                         // printf("\n");
