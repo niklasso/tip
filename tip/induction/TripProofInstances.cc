@@ -21,6 +21,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/unroll/Unroll.h"
 #include "tip/induction/TripProofInstances.h"
 
+// #define EXPENSIVE_CNF_PREPROCESS
+
 namespace Tip {
 
     namespace {
@@ -137,7 +139,6 @@ namespace Tip {
             assume.push(trigg);
             check(!s.solve(assume));
 
-            //s.addClause(~trigg);
             s.releaseVar(~trigg);
 
             // Check 's.conflict' and remove literals not present there:
@@ -213,7 +214,7 @@ namespace Tip {
         extractFlopOuts   (tip, umap[1], cl, *solver, umapl[1], inputs);
 
         // Simplify CNF:
-#if 0
+#ifdef EXPENSIVE_CNF_PREPROCESS
         solver->use_asymm = true;
         solver->grow = 2;
 #endif
@@ -334,7 +335,6 @@ namespace Tip {
 
     void PropInstance::clearClauses()
     {
-        //solver->addClause(~trigg);
         solver->releaseVar(~trigg);
         trigg = mkLit(solver->newVar());
     }
@@ -380,6 +380,10 @@ namespace Tip {
         extractProps      (tip, umap[1], cl, *solver, umapl[1], outputs);
 
         // Simplify CNF:
+#ifdef EXPENSIVE_CNF_PREPROCESS
+        solver->use_asymm = true;
+        solver->grow = 2;
+#endif
         solver->eliminate(true);
         solver->thaw();
         trigg = mkLit(solver->newVar());
@@ -391,102 +395,6 @@ namespace Tip {
         for (int i = 0; i < cs.size(); i++)
             printf("%s%d ", sign(cs[i])?"-":"", var(cs[i]));
     }
-
-
-    #if 0
-    lbool PropInstance::evaluate(const LitSet& lset, Sig p)
-    {
-        // FIXME: yuck!
-        GMap<lbool> value(tip.main.lastGate(), l_Undef);
-
-        for (TrailIterator ti = solver->trailBegin(); ti != solver->trailEnd(); ++ti)
-            printf("  unit: %s%d\n", sign(*ti)?"-":"", var(*ti));
-        
-        for (ClauseIterator ci = solver->clausesBegin(); ci != solver->clausesEnd(); ++ci){
-            printf("  clause: ");
-            printLits(*ci);
-            printf("\n");
-        }
-        
-        for (GateIt git = tip.main.begin0(); git != tip.main.end(); ++git){
-            printGate(*git);
-            Lit l = umapl[0][*git];
-            if (l != lit_Undef){
-                lbool v = solver->value(l);
-                printf(" = %c\n", v == l_Undef ? 'x' : v == l_False ? '0' : '1');
-            }else
-                printf(" = ?\n");
-        }
-
-        // Evaluate cycle 0:
-        for (GateIt git = tip.main.begin0(); git != tip.main.end(); ++git){
-            if (value[*git] == l_Undef){
-                if (*git == gate_True)
-                    value[*git] = l_True;
-                else if (type(*git) == gtype_Inp){
-                    value[*git] = model.value(*git, umapl[0]);
-                    // For unknown inputs, we'll only check that there
-                    // is one value that falsifies 'p':
-                    if (value[*git] == l_Undef && !tip.flps.isFlop(*git))
-                        value[*git] = l_False;
-                }else{
-                    assert(type(*git) == gtype_And);
-                    Sig x = tip.main.lchild(*git);
-                    Sig y = tip.main.rchild(*git);
-                    value[*git] = (value[gate(x)] ^ sign(x)) && (value[gate(y)] ^ sign(y));
-                }
-            }
-            printGate(*git);
-            Lit l = umapl[0][*git];
-            if (l != lit_Undef)
-                printf(" (%s%d) ", sign(l)?"-":"", var(l));
-            else
-                printf(" (x) ");
-            
-            printf(" = %c\n", value[*git] == l_Undef ? 'x' : value[*git] == l_False ? '0' : '1');
-        }
-
-        // Copy values of flops to next cycle:
-        GMap<lbool> value_next(tip.main.lastGate(), l_Undef);
-        for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
-            Sig x = tip.flps.next(*flit);
-            value_next[*flit] = value[gate(x)] ^ sign(x);
-        }
-        value_next.moveTo(value);
-
-        // Evaluate cycle 1:
-        for (GateIt git = tip.main.begin0(); git != tip.main.end(); ++git){
-            if (value[*git] == l_Undef){
-                if (*git == gate_True)
-                    value[*git] = l_True;
-                else if (type(*git) == gtype_Inp){
-                    value[*git] = model.value(*git, umapl[1]);
-                    // For unknown inputs, we'll only check that there
-                    // is one value that falsifies 'p':
-                    if (value[*git] == l_Undef && !tip.flps.isFlop(*git))
-                        value[*git] = l_False;
-                }else{
-                    assert(type(*git) == gtype_And);
-                    Sig x = tip.main.lchild(*git);
-                    Sig y = tip.main.rchild(*git);
-                    value[*git] = (value[gate(x)] ^ sign(x)) && (value[gate(y)] ^ sign(y));
-                }
-            }
-            printGate(*git); 
-            Lit l = umapl[1][*git];
-            if (l != lit_Undef)
-                printf(" (%s%d) ", sign(l)?"-":"", var(l));
-            else
-                printf(" (x) ");
-            printf(" = %c\n", value[*git] == l_Undef ? 'x' : value[*git] == l_False ? '0' : '1');
-        }
-        //printf(" ... got here:\n");
-        lbool result = value[gate(p)] ^ sign(p);
-        printf("result = %c\n", result == l_Undef ? 'x' : result == l_False ? '0' : '1');
-        assert(result == l_False);
-        return result;
-    }
-    #endif
 
 
     lbool PropInstance::prove(Sig p, ScheduledClause*& no, unsigned cycle)
@@ -549,8 +457,8 @@ namespace Tip {
     void StepInstance::addClause(const Clause& c)
     {
         vec<Lit> xs;
-        // Add the unconditionally if it is an invariant, or else triggered by the cycles
-        // activation literal:
+        // Add the clause unconditionally if it is an invariant, otherwise make it triggered by the
+        // cycle's activation literal:
         if (c.cycle != cycle_Undef){
             activate.growTo(c.cycle+1, lit_Undef);
             if (activate[c.cycle] == lit_Undef)
@@ -572,7 +480,6 @@ namespace Tip {
         assert(cycle != cycle_Undef);
         if ((int)cycle < cycle_clauses.size() && (cycle_clauses[cycle] / 2) > num_clauses){
             // Disable all clauses added to this cycle:
-            //solver->addClause(~activate[cycle]);
             solver->releaseVar(~activate[cycle]);
             cycle_clauses[cycle] = 0;
 
@@ -614,37 +521,13 @@ namespace Tip {
         extractInputs  (tip, id, cl, *solver, umapl, inputs);
         extractFlopOuts(tip, id, cl, *solver, umapl, outputs);
 
-#if 0
+        // Simplify CNF:
+#ifdef EXPENSIVE_CNF_PREPROCESS
         solver->use_asymm = true;
         solver->grow = 2;
 #endif
-
-        // Simplify CNF:
         solver->eliminate(true);
         solver->thaw();
-    }
-
-
-    void StepInstance::evaluate(vec<Sig>& clause)
-    {
-        GMap<lbool> value(tip.main.lastGate(), l_Undef);
-        for (GateIt git = tip.main.begin(); git != tip.main.end(); ++git)
-            if (type(*git) == gtype_Inp){
-                Lit l = umapl[*git];
-                value[*git] = lset.has(var(l)) ^ sign(l);
-            }else{
-                assert(type(*git) == gtype_And);
-                Sig x = tip.main.lchild(*git);
-                Sig y = tip.main.rchild(*git);
-                value[*git] = (value[gate(x)] ^ sign(x)) && (value[gate(y)] ^ sign(y));
-            }
-
-        for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
-            Sig   x = tip.flps.next(*flit);
-            lbool v = value[gate(x)] ^ sign(x);
-            if (v != l_Undef)
-                clause.push(mkSig(*flit, v == l_True));
-        }
     }
 
 
@@ -664,9 +547,6 @@ namespace Tip {
                     assumes.push(activate[i]);
                     inputs .push(activate[i]);
                 }
-
-        // These clauses must be satisfiable:
-        // assert(solver->solve(assumes));
 
         // Assume negation of clause 'c' (outgoing):
         for (unsigned i = 0; i < c.size(); i++){
@@ -707,7 +587,6 @@ namespace Tip {
                 solver->addClause(cls);
                 assumes.push(trigg);
                 sat = solver->solve(assumes);
-                //solver->addClause(~trigg);
                 solver->releaseVar(~trigg);
                 // printf("[StepInstance::prove] needed to add induction hypothesis => sat=%d\n", sat);
             }else{
@@ -731,20 +610,6 @@ namespace Tip {
                 ScheduledClause* pred = new ScheduledClause(clause, c.cycle-1, frames[0], next);
                 //printf("[StepInstance::prove] pred = %p\n", pred);
                 no = pred;
-
-                // { //TMP-debug:
-                //     vec<Sig> xs;
-                //     evaluate(shrunk_model, xs);
-                //     Clause   eval(xs, c.cycle);
-                //     printf("[StepInstance::prove] c    = ");
-                //     printClause(tip, c);
-                //     printf("\n");
-                //     printf("[StepInstance::prove] eval = ");
-                //     printClause(tip, eval);
-                //     printf("\n");
-                //     assert(subsumes(c, eval));
-                // }
-
             }
 
             result = false;
