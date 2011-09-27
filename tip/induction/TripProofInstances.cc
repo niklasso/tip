@@ -21,7 +21,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/unroll/Unroll.h"
 #include "tip/induction/TripProofInstances.h"
 
-// #define EXPENSIVE_CNF_PREPROCESS
+//#define EXPENSIVE_CNF_PREPROCESS
 
 namespace Tip {
 

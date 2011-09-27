@@ -23,27 +23,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/induction/TripTypes.h"
 #include "tip/induction/TripProofInstances.h"
 
+#define GENERALIZE_THEN_PUSH
+
 namespace Tip {
 
     namespace {
-
-        template<class Vec>
-        void mkUnion(const Vec& c, const Vec& d, vec<Sig>& out)
-        {
-            // FIXME: clean up.
-            out.clear();
-            unsigned i,j;
-            for (i = j = 0; i < c.size() || j < d.size();){
-                if (i < c.size() && (j == d.size() || c[i] < d[j]))
-                    out.push(c[i++]);
-                else if (i == c.size() || d[j] < c[i])
-                    out.push(d[j++]);
-                else{
-                    out.push(c[i++]);
-                    j++;
-                }
-            }
-        }
 
         //===================================================================================================
         // Temporal Relative Induction Prover:
@@ -67,21 +51,23 @@ namespace Tip {
             PropInstance         prop;
             StepInstance         step;
 
-            // PROVE:   Init ^ c ^ Trans => c'
+            // PROVE:   Init ^ Trans => c'
             // RETURNS: True and a stronger clause d (subset of c) that holds in cycle 1,
             //       or False and the starting point of a counter-example trace.
             bool             proveInit(const ScheduledClause* c, Clause& yes, ScheduledClause*& no);
             bool             proveInit(const Clause& c, Clause& yes);
 
             // PROVE:   let k = c.cycle: F_inv ^ F[k-1] ^ c ^ Trans => c'
-            // RETURNS: True and a stronger clause d (subset of c) that holds in some cycle >= k,
+            // RETURNS: True and a minimal stronger clause d (subset of c) that holds in a maximal cycle >= k,
             //       or False and a new clause predecessor to be proved in cycle k-1.
+            bool             proveAndGeneralize(const ScheduledClause* c, Clause& yes, ScheduledClause*& no);
 
-            bool             proveStep(const ScheduledClause* c, Clause& yes, ScheduledClause*& no);
-            lbool            proveAndGeneralize(const ScheduledClause* c, Clause& yes, ScheduledClause*& no);
-
+            // PROVE:   let k = c.cycle: F_inv ^ F[k-1] ^ c ^ Trans => c'
+            // RETURNS: True and a stronger clause d (subset of c) that holds in some cycle >= k,
+            //       or False if c does not hold in cycle k.
             bool             proveStep(const Clause& c, Clause& yes);
 
+            // Find a maximal generalization of c that still is subsumed by init.
             void             generalize(const Clause& init, Clause& c);
 
             // PROVE:   let k = F.size()-1: F_inv ^ F[k] ^ Trans => p'
@@ -92,7 +78,7 @@ namespace Tip {
 
             // Prove scheduled clause "recursively". Returns true if the clause was proved, and
             // false if it was falsified.
-            bool             propagate(ScheduledClause* sc, SafeProp p);
+            bool             proveRec(ScheduledClause* sc, SafeProp p);
 
             // Try to push clauses forwards, particularily push clauses forward into the newly opened last
             // frame. Returns true if an invariant is found and false otherwise.
@@ -168,67 +154,33 @@ namespace Tip {
 
         void Trip::generalize(const Clause& ic, Clause& c)
         {
-            vec<Sig>         try_remove;
-            Clause           d,e;
-            vec<Sig>         xs;
+            Clause try_remove = c - ic;
+            Clause d,e;
 
-            for (unsigned i = 0; i < c.size(); i++)
-                if (!find(ic, c[i]))
-                    try_remove.push(c[i]);
-
-            // printf("[generalize] ic = ");
-            // printClause(ic);
-            // printf("\n");
-            // printf("[generalize] c  = ");
-            // printClause(c);
-            // printf("\n");
-            mkUnion(ic, c, xs);
-            c = Clause(xs, c.cycle);
-
-            for (int i = 0; i < try_remove.size(); i++)
-                if (find(c, try_remove[i])){
-                    xs.clear();
-                    for (unsigned j = 0; j < c.size(); j++)
-                        if (c[j] != try_remove[i])
-                            xs.push(c[j]);
-                    e = Clause(xs, c.cycle);
-                    // printf("[generalize] e    = ");
-                    // printClause(e);
-                    // printf("\n");
-                    if (step.prove(e, d)){
-                        mkUnion(ic, d, xs);
-                        c = Clause(xs, d.cycle);
-                        // printf("[generalize] c    = ");
-                        // printClause(c);
-                        // printf("\n");
-                    }else{
-                        // printf("[generalize] failed to remove ");
-                        // printSig(try_remove[i]);
-                        // printf("\n");
-                    }
-                }
+            c = ic + c;
+            for (unsigned i = 0; i < try_remove.size(); i++)
+                if (find(c, try_remove[i]))
+                    if (step.prove(c - try_remove[i], d))
+                        c = ic + d;
         }
 
 
-        lbool Trip::proveAndGeneralize(const ScheduledClause* c, Clause& yes, ScheduledClause*& no)
+        bool Trip::proveAndGeneralize(const ScheduledClause* c, Clause& yes, ScheduledClause*& no)
         {
             Clause yes_init, yes_step;
             if (c->cycle == 0){
-                if (!init.prove(*c, yes_init, no, c)){
-                    return l_False;
-                }
+                if (!init.prove(*c, yes_init, no, c))
+                    return false;
                 yes_step = yes_init;
             }else{
                 if (!step.prove(*c, yes_step, no, c))
-                    return l_Undef;
+                    return false;
                 
                 check(proveInit(*c, yes_init));
-#if 1
+#ifdef GENERALIZE_THEN_PUSH
                 generalize(yes_init, yes_step);
 #else
-                vec<Sig> xs;
-                mkUnion(yes_init, yes_step, xs);
-                yes_step = Clause(xs, yes_step.cycle);
+                yes_step = yes_init + yes_step;
 #endif
             }
 
@@ -242,19 +194,17 @@ namespace Tip {
                 d.cycle++;
                 if (!step.prove(d, yes_step))
                     break;
-                vec<Sig> xs;
-                mkUnion(yes_init, yes_step, xs);
-                yes_step = Clause(xs, yes_step.cycle);
+                yes_step = yes_init + yes_step;
             }
 
-#if 0
+#ifndef GENERALIZE_THEN_PUSH
             generalize(yes_init, yes_step);
 #endif
 
             yes = yes_step;
             // TODO: assert something based on subsumtion instead.
             // assert(proveInit(yes, yes_step));
-            return l_True;
+            return true;
         }
 
 
@@ -273,9 +223,7 @@ namespace Tip {
             check(proveInit(c, yes_init));
 
             // Calculate union of the two strengthened clauses:
-            vec<Sig> yes_union;
-            mkUnion(yes_step, yes_init, yes_union);
-            yes = Clause(yes_union, yes_step.cycle);
+            yes = yes_init + yes_step;
             return true;
         }
 
@@ -644,11 +592,11 @@ namespace Tip {
         }
 
 
-        bool Trip::propagate(ScheduledClause* sc, SafeProp p)
+        bool Trip::proveRec(ScheduledClause* sc, SafeProp p)
         {
             enqueueClause(sc);
             for (;;){
-                // if (tip.verbosity >= 2) printf("[propagate] property = %d\n", p);
+                // if (tip.verbosity >= 2) printf("[proveRec] property = %d\n", p);
 
                 ScheduledClause* sc = getMinClause();
 
@@ -671,8 +619,7 @@ namespace Tip {
 
                 static unsigned iters = 0;
 
-                lbool result = proveAndGeneralize(sc, minimized, pred);
-                if (result == l_True){
+                if (proveAndGeneralize(sc, minimized, pred)){
                     if ((iters++ % 10) == 0) printStats(sc->cycle, false);
                     // TODO: plug memory leak of scheduled clauses if invariant is found.
                     if (addClause(minimized)){
@@ -686,7 +633,7 @@ namespace Tip {
                         ;
                     // FIXME: reference counting?
                     // delete sc;
-                }else if (result == l_False){
+                }else if (sc->cycle == 0){
                     Trace             cex    = tip.newTrace();
                     vec<vec<lbool> >& frames = tip.traces[cex].frames;
                     extractTrace(pred, frames);
@@ -715,7 +662,7 @@ namespace Tip {
                     do {
                         prop_res = proveProp(tip.safe_props[p].sig, pred);
                         if (prop_res == l_False){
-                            if (!propagate(pred, p))
+                            if (!proveRec(pred, p))
                                 // 'p' was falsified.
                                 break;
                         }else if (prop_res == l_True){

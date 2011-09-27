@@ -77,6 +77,60 @@ namespace Tip {
         bool     isActive  ()           const { return active; }
     };
 
+    static inline Clause operator+(const Clause& c, const Clause& d)
+    {
+        // FIXME: clean up.
+        vec<Sig> out;
+        unsigned i,j;
+        for (i = j = 0; i < c.size() || j < d.size();){
+            if (i < c.size() && (j == d.size() || c[i] < d[j]))
+                out.push(c[i++]);
+            else if (i == c.size() || d[j] < c[i])
+                out.push(d[j++]);
+            else{
+                out.push(c[i++]);
+                j++;
+            }
+        }
+        unsigned cycle = c.cycle > d.cycle ? c.cycle : d.cycle;
+        return Clause(out, cycle);
+    }
+
+
+    static inline Clause operator-(const Clause& c, const Clause& d)
+    {
+        vec<Sig> out;
+        unsigned i,j;
+        for (i = j = 0; i < c.size(); ){
+            if (j == d.size() || c[i] < d[j])
+                out.push(c[i++]);
+            else if (d[j++] == c[i])
+                i++;
+        }
+        return Clause(out, c.cycle);
+    }
+
+
+    static inline Clause operator-(const Clause& c, Sig x)
+    {
+        vec<Sig> out;
+        for (unsigned i = 0; i < c.size(); i++)
+            if (c[i] != x)
+                out.push(c[i]);
+        return Clause(out, c.cycle);
+    }
+
+
+    static inline bool operator==(const Clause& c, const Clause& d){
+        if (c.cycle != d.cycle || c.size() != d.size())
+            return false;
+        for (unsigned i = 0; i < c.size(); i++)
+            if (c[i] != d[i])
+                return false;
+        return true;
+    }
+    static inline bool operator!=(const Clause& c, const Clause& d){ return !(c == d); }
+
     // A class to represent circuit inputs for a time-frame:
     class Inputs {
         unsigned sz;
