@@ -159,18 +159,59 @@ namespace Tip {
     };
 
 
+    class ScheduledClause;
+
+    template<class T>
+    class SharedRef {
+        T* ptr;
+
+        void ref()  { if (ptr != NULL) ptr->refc()++; }
+        void unref(){ if (ptr != NULL) if (--ptr->refc() == 0) delete ptr; }
+
+    public:
+        SharedRef(T* ptr_) : ptr(ptr_){ ref(); }
+        SharedRef() : ptr(NULL){}
+       ~SharedRef(){ unref(); }
+        SharedRef(const SharedRef& scr) : ptr(scr.ptr){ ref(); }
+
+        SharedRef& operator=(const SharedRef& scr)
+        {
+            unref();
+            ptr = scr.ptr;
+            ref();
+            return *this;
+        }
+
+        const T& operator* () const { return *ptr; }
+        T&       operator* ()       { return *ptr; }
+        const T* operator->() const { return ptr; }
+        T*       operator->()       { return ptr; }
+
+        bool operator==(const T* x) const { return ptr == x; }
+        bool operator!=(const T* x) const { return ptr != x; }
+        bool operator==(const SharedRef<T>& x) const { return ptr == x.ptr; }
+        bool operator!=(const SharedRef<T>& x) const { return ptr != x.ptr; }
+    };
+
+
     // A class to represent scheduled proof obligations for the relative induction algorithm. To
     // extract counter-example traces each scheduled clause has a pointer to the parent clause, and
     // the set of input values needed to connect them.
-    struct ScheduledClause : public Clause {
-        Inputs                 inputs;
-        const ScheduledClause* next;
+    class ScheduledClause : public Clause {
+        unsigned                   refc_;
+    public:
+        Inputs                     inputs;
+        SharedRef<ScheduledClause> next;
         template<class Lits, class Inps>
-        ScheduledClause(const Lits& xs, Cycle cycle_, const Inps& is, const ScheduledClause* next_)
-            : Clause(xs, cycle_), inputs(is), next(next_){}
+        ScheduledClause(const Lits& xs, Cycle cycle_, const Inps& is, SharedRef<ScheduledClause> next_)
+            : Clause(xs, cycle_), refc_(0), inputs(is), next(next_)
+        {}
+        unsigned& refc() { return refc_; }
 
-        ScheduledClause() : next(NULL){}
+        // Is this needed?
+        ScheduledClause() : refc_(0), next(NULL){}
     };
+
 
     // Check if clause 'c' subsumes 'd'. This means that 'c' is a subset of 'd' and 'c' holds
     // longer than (or as long as) 'd'.

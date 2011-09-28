@@ -167,6 +167,7 @@ private:
 class TipCirc : public SeqCirc {
 public:
     TipCirc() : tradaptor(NULL), verbosity(0){}
+    ~TipCirc(){ delete tradaptor; }
 
     //---------------------------------------------------------------------------------------------
     // Top-level user API:

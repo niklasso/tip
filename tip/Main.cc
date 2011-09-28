@@ -55,5 +55,6 @@ int main(int argc, char** argv)
         fclose(res);
     }
 
-    exit(0);
+    return 0;
+    //exit(0);
 }

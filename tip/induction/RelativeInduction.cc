@@ -41,7 +41,7 @@ namespace Tip {
             unsigned             n_inv;         // Number of active invariants.
             unsigned             n_total;       // Total number of active clauses.
 
-            vec<vec<ScheduledClause*> > 
+            vec<vec<SharedRef<ScheduledClause> > >
                                  clause_queue;
             SMap<vec<Clause*> >  bwd_occurs;
             SMap<vec<Clause*> >  fwd_occurs;
@@ -54,13 +54,13 @@ namespace Tip {
             // PROVE:   Init ^ Trans => c'
             // RETURNS: True and a stronger clause d (subset of c) that holds in cycle 1,
             //       or False and the starting point of a counter-example trace.
-            bool             proveInit(const ScheduledClause* c, Clause& yes, ScheduledClause*& no);
+            bool             proveInit(SharedRef<ScheduledClause> c, Clause& yes, SharedRef<ScheduledClause>& no);
             bool             proveInit(const Clause& c, Clause& yes);
 
             // PROVE:   let k = c.cycle: F_inv ^ F[k-1] ^ c ^ Trans => c'
             // RETURNS: True and a minimal stronger clause d (subset of c) that holds in a maximal cycle >= k,
             //       or False and a new clause predecessor to be proved in cycle k-1.
-            bool             proveAndGeneralize(const ScheduledClause* c, Clause& yes, ScheduledClause*& no);
+            bool             proveAndGeneralize(SharedRef<ScheduledClause> c, Clause& yes, SharedRef<ScheduledClause>& no);
 
             // PROVE:   let k = c.cycle: F_inv ^ F[k-1] ^ c ^ Trans => c'
             // RETURNS: True and a stronger clause d (subset of c) that holds in some cycle >= k,
@@ -74,11 +74,11 @@ namespace Tip {
             // RETURNS: l_True if the property is implied by the invariants alone,
             //       or l_False and a new clause predecessor to be proved in cycle k,
             //       or l_Undef when the propery 'p' holds in cycle k+1.
-            lbool            proveProp(Sig p, ScheduledClause*& no);
+            lbool            proveProp(Sig p, SharedRef<ScheduledClause>& no);
 
             // Prove scheduled clause "recursively". Returns true if the clause was proved, and
             // false if it was falsified.
-            bool             proveRec(ScheduledClause* sc, SafeProp p);
+            bool             proveRec(SharedRef<ScheduledClause> sc, SafeProp p);
 
             // Try to push clauses forwards, particularily push clauses forward into the newly opened last
             // frame. Returns true if an invariant is found and false otherwise.
@@ -107,11 +107,12 @@ namespace Tip {
             bool             bwdSubsume   (Clause* c, bool verify = false);
             void             verifySubsumption();
 
-            void             enqueueClause(ScheduledClause* sc);
-            ScheduledClause* getMinClause ();
+            void             enqueueClause(SharedRef<ScheduledClause> sc);
+            SharedRef<ScheduledClause>
+                             getMinClause ();
 
             // Extracts the trace that leads to the failure, and removes all scheduled clauses.
-            void             extractTrace (const ScheduledClause* sc, vec<vec<lbool> >& frames);
+            void             extractTrace (SharedRef<ScheduledClause> sc, vec<vec<lbool> >& frames);
 
 
 
@@ -132,6 +133,16 @@ namespace Tip {
                 F_size.push(0);
             }
 
+            ~Trip()
+            {
+                for (int i = 0; i < F.size(); i++)
+                    for (int j = 0; j < F[i].size(); j++)
+                        delete F[i][j];
+                
+                for (int i = 0; i < F_inv.size(); i++)
+                    delete F_inv[i];
+            }
+
             // Prove or disprove all properties using depth k. Returns true if all properties are decided, and
             // false if there are still some unresolved property.
             bool decideCycle();
@@ -143,7 +154,7 @@ namespace Tip {
             void printStats(unsigned curr_cycle = cycle_Undef, bool newline = true);
         };
 
-        bool Trip::proveInit(const ScheduledClause* c, Clause& yes, ScheduledClause*& no){ 
+        bool Trip::proveInit(SharedRef<ScheduledClause> c, Clause& yes, SharedRef<ScheduledClause>& no){ 
             return init.prove(*c, yes, no, c);
         }
 
@@ -165,7 +176,7 @@ namespace Tip {
         }
 
 
-        bool Trip::proveAndGeneralize(const ScheduledClause* c, Clause& yes, ScheduledClause*& no)
+        bool Trip::proveAndGeneralize(SharedRef<ScheduledClause> c, Clause& yes, SharedRef<ScheduledClause>& no)
         {
             Clause yes_init, yes_step;
             if (c->cycle == 0){
@@ -228,7 +239,7 @@ namespace Tip {
         }
 
 
-        lbool Trip::proveProp(Sig p, ScheduledClause*& no){ return prop.prove(p, no, size()-1); }
+        lbool Trip::proveProp(Sig p, SharedRef<ScheduledClause>& no){ return prop.prove(p, no, size()-1); }
 
 
         bool Trip::baseCase()
@@ -244,25 +255,20 @@ namespace Tip {
         }
 
 
-        void Trip::extractTrace(const ScheduledClause* sc, vec<vec<lbool> >& frames)
+        void Trip::extractTrace(SharedRef<ScheduledClause> sc, vec<vec<lbool> >& frames)
         {
             // Extract trace:
-            for (const ScheduledClause* scan = sc; scan != NULL; scan = scan->next){
+            for (SharedRef<ScheduledClause> scan = sc; scan != NULL; scan = scan->next){
                 // printf("[extractTrace] scan = %p, cycle = %d\n", scan, scan->cycle);
                 frames.push();
                 for (unsigned i = 0; i < scan->inputs.size(); i++)
                     frames.last().push(scan->inputs[i]);
             }
-
-            // TODO: this leaks memory due to the fact that snippets from the property instance,
-            // and the init instance don't appear in the clause queue.
-            for (int i = 0; i < clause_queue.size(); i++)
-                for (int j = 0; j < clause_queue[i].size(); j++)
-                    delete clause_queue[i][j];
+            // Note: should free memory implicitly using reference counting etc.
             clause_queue.clear();
         }
 
-        void Trip::enqueueClause(ScheduledClause* sc)
+        void Trip::enqueueClause(SharedRef<ScheduledClause> sc)
         {
             if (tip.verbosity >= 4){
                 printf("[enqueueClause] clause = ");
@@ -273,7 +279,7 @@ namespace Tip {
         }
 
 
-        ScheduledClause* Trip::getMinClause()
+        SharedRef<ScheduledClause> Trip::getMinClause()
         {
             // Naive implementation:
             int i;
@@ -283,7 +289,7 @@ namespace Tip {
             if (i == clause_queue.size())
                 return NULL;
 
-            ScheduledClause* result = clause_queue[i].last();
+            SharedRef<ScheduledClause> result = clause_queue[i].last();
             clause_queue[i].pop();
 
             if (tip.verbosity >= 4){
@@ -586,24 +592,24 @@ namespace Tip {
         }
 
 
-        static bool findClause(const ScheduledClause* x, const ScheduledClause* xs)
+        static bool findClause(SharedRef<ScheduledClause> x, SharedRef<ScheduledClause> xs)
         {
             return xs->next != NULL && (xs->next == x || findClause(x, xs->next));
         }
 
 
-        bool Trip::proveRec(ScheduledClause* sc, SafeProp p)
+        bool Trip::proveRec(SharedRef<ScheduledClause> sc, SafeProp p)
         {
             enqueueClause(sc);
             for (;;){
                 // if (tip.verbosity >= 2) printf("[proveRec] property = %d\n", p);
 
-                ScheduledClause* sc = getMinClause();
+                SharedRef<ScheduledClause> sc = getMinClause();
 
                 if (sc == NULL)
                     break;
 
-                if (fwdSubsumed((Clause*)sc)){
+                if (fwdSubsumed(&(const Clause&)*sc)){
                     // NOTE: there may still be live references to 'sc'. Need some kind of
                     // reference counting?
                     // delete sc;
@@ -614,8 +620,8 @@ namespace Tip {
                     continue;
                 }
 
-                ScheduledClause* pred;
-                Clause           minimized;
+                SharedRef<ScheduledClause> pred;
+                Clause                     minimized;
 
                 static unsigned iters = 0;
 
@@ -639,8 +645,6 @@ namespace Tip {
                     extractTrace(pred, frames);
                     tip.safe_props[p].stat   = pstat_Falsified;
                     tip.safe_props[p].cex    = cex;
-                    delete sc;
-                    delete pred;
                     return false;
                 }else{
                     enqueueClause(pred);
@@ -654,8 +658,8 @@ namespace Tip {
 
         bool Trip::decideCycle()
         {
-            ScheduledClause* pred;
-            int unresolved = 0;
+            SharedRef<ScheduledClause> pred;
+            int                        unresolved = 0;
             for (SafeProp p = 0; p < tip.safe_props.size(); p++)
                 if (tip.safe_props[p].stat == pstat_Unknown){
                     lbool prop_res = l_False;

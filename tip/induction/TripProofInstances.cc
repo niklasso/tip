@@ -233,9 +233,9 @@ namespace Tip {
         }
     };
 
-    bool InitInstance::prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next)
+    bool InitInstance::prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next)
     {
-        assert(next == NULL || &c == (Clause*)next);
+        assert(next == NULL || &c == (Clause*)&*next);
 
         vec<Lit> assumes;
         for (unsigned i = 0; i < c.size(); i++){
@@ -260,8 +260,8 @@ namespace Tip {
                 traceInputs     (tip, lset, umapl[1], frames);
 
                 vec<Sig>         dummy;
-                ScheduledClause* pred0    = new ScheduledClause(dummy, 0, frames[1], next);
-                ScheduledClause* pred_rst = new ScheduledClause(dummy, 0, frames[0], pred0);
+                SharedRef<ScheduledClause> pred0   (new ScheduledClause(dummy, 0, frames[1], next));
+                SharedRef<ScheduledClause> pred_rst(new ScheduledClause(dummy, 0, frames[0], pred0));
                 //printf("[InitInstance::prove] pred0 = %p, pred_rst = %p\n", pred0, pred_rst);
                 no = pred_rst;
             }
@@ -311,7 +311,7 @@ namespace Tip {
 
     bool InitInstance::prove(const Clause& c, Clause& yes)
     {
-        ScheduledClause* dummy;
+        SharedRef<ScheduledClause> dummy;
         return prove(c, yes, dummy);
     }
 
@@ -397,7 +397,7 @@ namespace Tip {
     }
 
 
-    lbool PropInstance::prove(Sig p, ScheduledClause*& no, unsigned cycle)
+    lbool PropInstance::prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle)
     {
         Lit l = umapl[1][gate(p)] ^ sign(p);
         if (solver->solve(~l, trigg)){
@@ -422,8 +422,11 @@ namespace Tip {
             // assert(evaluate(shrunk_model, p) == l_False);
 
             vec<Sig> dummy;
-            ScheduledClause* last = new ScheduledClause(dummy,  cycle+1, frames[1], NULL);
-            ScheduledClause* pred = new ScheduledClause(clause, cycle,   frames[0], last);
+            ScheduledClause* apa = new ScheduledClause(dummy,  cycle+1, frames[1], NULL);
+            assert(apa != NULL);
+            SharedRef<ScheduledClause> last(apa);
+            //SharedRef<ScheduledClause> last(new ScheduledClause(dummy,  cycle+1, frames[1], NULL));
+            SharedRef<ScheduledClause> pred(new ScheduledClause(clause, cycle,   frames[0], last));
             //printf("[PropInstance::prove] last = %p, pred = %p\n", last, pred);
             no = pred;
 
@@ -531,9 +534,9 @@ namespace Tip {
     }
 
 
-    bool StepInstance::prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next)
+    bool StepInstance::prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next)
     {
-        assert(next == NULL || &c == (Clause*)next);
+        assert(next == NULL || &c == (Clause*)&*next);
         assert(c.cycle > 0);
         vec<Lit> outputs;
         vec<Lit> inputs;
@@ -607,7 +610,7 @@ namespace Tip {
                 traceInputs     (tip, lset, umapl, frames);
                 getClause       (tip, lset, umapl, clause);
 
-                ScheduledClause* pred = new ScheduledClause(clause, c.cycle-1, frames[0], next);
+                SharedRef<ScheduledClause> pred(new ScheduledClause(clause, c.cycle-1, frames[0], next));
                 //printf("[StepInstance::prove] pred = %p\n", pred);
                 no = pred;
             }
@@ -643,7 +646,7 @@ namespace Tip {
 
     bool StepInstance::prove(const Clause& c, Clause& yes)
     {
-        ScheduledClause* dummy;
+        SharedRef<ScheduledClause> dummy;
         return prove(c, yes, dummy);
     }
 

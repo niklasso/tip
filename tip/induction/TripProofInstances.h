@@ -111,7 +111,7 @@ namespace Tip {
         InitInstance(const TipCirc& t_);
         ~InitInstance();
         
-        bool prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next = NULL);
+        bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
         bool prove(const Clause& c, Clause& yes);
 
         void printStats();
@@ -139,7 +139,7 @@ namespace Tip {
         PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_);
         ~PropInstance();
         
-        lbool prove(Sig p, ScheduledClause*& no, unsigned cycle);
+        lbool prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle);
 
         void printStats();
     };
@@ -169,7 +169,7 @@ namespace Tip {
         StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_);
         ~StepInstance();
         
-        bool prove(const Clause& c, Clause& yes, ScheduledClause*& no, const ScheduledClause* next = NULL);
+        bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
         bool prove(const Clause& c, Clause& yes);
 
         void printStats();
