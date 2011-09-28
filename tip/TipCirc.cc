@@ -52,9 +52,16 @@ namespace Tip {
         for (int i = 0; i < sects.bads.size(); i++)
             newSafeProp(~sects.bads[i]);
 
+        // Set up liveness properties:
+        for (int i = 0; i < sects.justs.size(); i++)
+            newLiveProp(sects.justs[i]);
+
         // Set up constraints:
         for (int i = 0; i < sects.cnstrs.size(); i++)
             cnstrs.merge(sig_True, sects.cnstrs[i]);
+
+        // Set up fairness:
+        sects.fairs.copyTo(fairs);
 
         // Set up trace adaptor to fix AIGER witness style:
         AigerInitTraceAdaptor* trad = new AigerInitTraceAdaptor();
