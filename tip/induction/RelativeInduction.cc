@@ -195,7 +195,7 @@ namespace Tip {
 #endif
             }
 
-            if (tip.verbosity >= 3 && c->cycle < yes_step.cycle)
+            if (tip.verbosity >= 4 && c->cycle < yes_step.cycle)
                 printf("[proveStep] clause was proved in the future: %d -> %d\n",
                        c->cycle, yes_step.cycle);
 
@@ -227,7 +227,7 @@ namespace Tip {
             if (!step.prove(c, yes_step))
                 return false;
 
-            if (tip.verbosity >= 3 && c.cycle < yes_step.cycle)
+            if (tip.verbosity >= 4 && c.cycle < yes_step.cycle)
                 printf("[proveStep] clause was proved in the future: %d -> %d\n",
                        c.cycle, yes_step.cycle);
 
@@ -270,10 +270,6 @@ namespace Tip {
 
         void Trip::enqueueClause(SharedRef<ScheduledClause> sc)
         {
-            if (tip.verbosity >= 4){
-                printf("[enqueueClause] clause = ");
-                printClause(*sc);
-                printf("\n"); }
             clause_queue.growTo(sc->cycle+1);
             clause_queue[sc->cycle].push(sc);
         }
@@ -291,11 +287,6 @@ namespace Tip {
 
             SharedRef<ScheduledClause> result = clause_queue[i].last();
             clause_queue[i].pop();
-
-            if (tip.verbosity >= 4){
-                printf("[getMinClause] clause = ");
-                printClause(*result);
-                printf("\n"); }
 
             return result;
         }
@@ -330,7 +321,7 @@ namespace Tip {
                         n_removed++, delete F[k][i];
                 F[k].shrink(i - j);
             }
-            if (tip.verbosity >= 2)
+            if (tip.verbosity >= 4)
                 printf("[clearInactive] removed %d inactive clauses\n", n_removed);
         }
 
@@ -341,15 +332,6 @@ namespace Tip {
             assert(c->isActive());
 
             c->deactivate();
-
-            if (tip.verbosity >= 3){
-                printf("[removeClause] clause removed:");
-                printClause(*c);
-                if (c->cycle != cycle_Undef)
-                    printf("(#clauses=%d at cycle %d)\n", F_size[c->cycle], c->cycle);
-                else
-                    printf("(inv)\n");
-            }
 
             if (c->cycle == cycle_Undef){
                 n_inv--;
@@ -398,15 +380,6 @@ namespace Tip {
             assert(c.size() > 0);
             assert(!fwdSubsumed(&c_));
             n_total++;
-
-            if (tip.verbosity >= 3){
-                printf("[addClause] clause proved:");
-                printClause(c);
-                if (c.cycle != cycle_Undef)
-                    printf("(#clauses=%d at cycle %d)\n", F_size[c.cycle], c.cycle);
-                else
-                    printf("(inv)\n");
-            }
 
             prop.addClause(c);
             step.addClause(c);
@@ -477,18 +450,8 @@ namespace Tip {
                     continue;
 
                 for (int j = 0; j < fwd_occurs[x].size(); j++)
-                    if (fwd_occurs[x][j]->isActive() && subsumes(*fwd_occurs[x][j], *c)){
-                        if (tip.verbosity >= 3){
-                            printf("[fwdSubsumed] c = ");
-                            printClause(*fwd_occurs[x][j]);
-                            printf("\n");
-                            printf("[fwdSubsumed] d = ");
-                            printClause(*c);
-                            printf("\n");
-                        }
-
+                    if (fwd_occurs[x][j]->isActive() && subsumes(*fwd_occurs[x][j], *c))
                         return true;
-                    }
             }
             return false;
         }
@@ -573,13 +536,6 @@ namespace Tip {
                         c = *F[i][j];
                         c.cycle++;
                         if (proveStep(c, d)){
-                            if (tip.verbosity >= 3) {
-                                printf(  "[pushClauses] pushed = ");
-                                printClause(*F[i][j]);
-                                printf("\n[pushClauses] to     = ");
-                                printClause(d);
-                                printf("\n"); }
-                            
                             // NOTE: the clause F[i][j] will be removed by backward subsumption.
                             if (addClause(d)){
                                 extractInvariant();
@@ -602,8 +558,6 @@ namespace Tip {
         {
             enqueueClause(sc);
             for (;;){
-                // if (tip.verbosity >= 2) printf("[proveRec] property = %d\n", p);
-
                 SharedRef<ScheduledClause> sc = getMinClause();
 
                 if (sc == NULL)
@@ -704,19 +658,22 @@ namespace Tip {
 
         void Trip::printStats(unsigned curr_cycle, bool newline)
         {
-            if (tip.verbosity >= 2){
+            if (tip.verbosity >= 3){
                 printf("[trip-stats] #clauses=%d, depth=%d\n", n_total, size());
                 init.printStats();
                 prop.printStats();
                 step.printStats();
             }
-            printf("%d:", size());
-            for (int i = 0; i < F.size(); i++){
-                printf("%c%d", i == (int)curr_cycle ? '*' : ' ', F_size[i]);
+
+            if (tip.verbosity >= 2 || (newline && tip.verbosity >= 1)){
+                printf("%d:", size());
+                for (int i = 0; i < F.size(); i++){
+                    printf("%c%d", i == (int)curr_cycle ? '*' : ' ', F_size[i]);
+                }
+                printf(" (%d)", n_inv);
+                printf(newline || tip.verbosity >= 3 ? "\n" : "\r");
+                fflush(stdout);
             }
-            printf(" (%d)", n_inv);
-            printf(newline || tip.verbosity >= 2 ? "\n" : "\r");
-            fflush(stdout);
         }
 
 
@@ -736,7 +693,7 @@ namespace Tip {
             while (!trip.decideCycle())
                 trip.printStats();
 
-        if (tip.verbosity >= 2){
+        if (tip.verbosity >= 3){
             // If some property was proved, print the invariant:
             for (SafeProp p = 0; p < tip.safe_props.size(); p++)
                 if (tip.safe_props[p].stat == pstat_Proved){
