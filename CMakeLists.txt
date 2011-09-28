@@ -41,6 +41,7 @@ set(TIP_LIB_SOURCES
     tip/constraints/Extract.cc
     tip/induction/RelativeInduction.cc
     tip/induction/TripProofInstances.cc
+    tip/liveness/EmbedFairness.cc
     tip/TipCirc.cc)
 
 add_library(tip-lib-static STATIC ${TIP_LIB_SOURCES})
