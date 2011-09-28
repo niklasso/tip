@@ -226,8 +226,7 @@ namespace Tip {
 
         printf("LIVENESS PROPERTIES:\n");
         for (LiveProp p = 0; p < live_props.size(); p++){
-            Sig psig = live_props[p].sig;
-            printSig(psig);
+            printSigs(live_props[p].sigs);
             printf("\n");
         }
     }

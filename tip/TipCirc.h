@@ -47,13 +47,18 @@ struct TraceData {
     TraceData() : loop(loop_none){}
 };
 
-struct PropData {
+struct SafePropData {
     Sig        sig;
     PropStatus stat;
     Trace      cex;
-    PropData(Sig s) : sig(s), stat(pstat_Unknown), cex(trace_Undef){}
+    SafePropData(Sig s) : sig(s), stat(pstat_Unknown), cex(trace_Undef){}
 };
 
+struct LivePropData {
+    vec<Sig>   sigs;
+    PropStatus stat;
+    Trace      cex;
+};
 
 class TraceAdaptor
 {
@@ -193,18 +198,19 @@ public:
 
     // Circuit data: (traces, properties, constraints)
 
-    vec<TraceData> traces;      // Set of traces falsifying some property.
-    vec<PropData>  safe_props;  // Set of safety properties.
-    vec<PropData>  live_props;  // Set of liveness properties.
-    Equivs         cnstrs;      // Set of global constraint (expressed as equivalences).
-    TraceAdaptor*  tradaptor;   // Trace adaptor to compensate trace changing transformations.
+    vec<TraceData>    traces;      // Set of traces falsifying some property.
+    vec<SafePropData> safe_props;  // Set of safety properties.
+    vec<LivePropData> live_props;  // Set of liveness properties.
+    Equivs            cnstrs;      // Set of global constraints (expressed as equivalences).
+    vec<Sig>          fairs;       // Set of fairness constraints.
+    TraceAdaptor*     tradaptor;   // Trace adaptor to compensate trace changing transformations.
 
     // TODO:
     //   - fairness constraints.
     //   - circuit outputs?
 
     SafeProp newSafeProp (Sig x);
-    LiveProp newLiveProp (Sig x);
+    LiveProp newLiveProp (const vec<Sig>& x);
     Trace    newTrace    ()     ;
 
     // Settings:
@@ -222,8 +228,16 @@ public:
 
 //=================================================================================================
 
-inline SafeProp TipCirc::newSafeProp (Sig x){ safe_props.push(PropData(x)); return safe_props.size()-1; }
-inline LiveProp TipCirc::newLiveProp (Sig x){ live_props.push(PropData(x)); return live_props.size()-1; }
+inline LiveProp TipCirc::newLiveProp (const vec<Sig>& s) {
+    live_props.push();
+    LivePropData& d = live_props.last();
+    s.copyTo(d.sigs);
+    d.stat = pstat_Unknown;
+    d.cex = trace_Undef;
+    return live_props.size()-1;
+}
+
+inline SafeProp TipCirc::newSafeProp (Sig x){ safe_props.push(SafePropData(x)); return safe_props.size()-1; }
 inline Trace    TipCirc::newTrace    ()     { traces.push(); return traces.size()-1; }
 
 //=================================================================================================
