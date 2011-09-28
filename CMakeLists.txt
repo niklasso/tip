@@ -42,6 +42,7 @@ set(TIP_LIB_SOURCES
     tip/induction/RelativeInduction.cc
     tip/induction/TripProofInstances.cc
     tip/liveness/EmbedFairness.cc
+    tip/liveness/Liveness.cc
     tip/TipCirc.cc)
 
 add_library(tip-lib-static STATIC ${TIP_LIB_SOURCES})
