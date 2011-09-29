@@ -629,13 +629,13 @@ namespace Tip {
 
             // What level was sufficient?
             unsigned k = cycle_Undef;
-            for (int i = c.cycle-1; i < activate.size(); i++)
-                if (find(solver->conflict, ~activate[i])){
-                    k = i+1;
-                    break;
-                }
-
-            // printf("[StepInstance::prove] c.cycle = %d, k = %d\n", c.cycle, k);
+            if (c.cycle != cycle_Undef)
+                for (int i = c.cycle-1; i < activate.size(); i++)
+                    if (find(solver->conflict, ~activate[i])){
+                        k = i+1;
+                        break;
+                    }
+            //printf("[StepInstance::prove] c.cycle = %d, k = %d\n", c.cycle, k);
             yes = Clause(subset, k);
             //printf("[StepInstance::prove] &yes = %p\n", &yes);
             result = true;
