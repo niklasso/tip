@@ -272,7 +272,7 @@ namespace Tip {
             // Minimize reason more:
             int n_before = solver->conflict.size();
             shrinkConflict(*solver);
-            if (tip.verbosity >= 3 && solver->conflict.size() < n_before)
+            if (tip.verbosity >= 4 && solver->conflict.size() < n_before)
                 printf("[InitInstance::prove] expensive conflict shrink: %d => %d\n",
                        n_before, solver->conflict.size());
 
@@ -293,7 +293,7 @@ namespace Tip {
                     slits[j++] = slits[i];
             slits.shrink(i-j);
 
-            if (tip.verbosity >= 3 && i - j > 0)
+            if (tip.verbosity >= 4 && i - j > 0)
                 printf("[InitInstance::prove] potential reason shrunk with: %d\n", i - j);
 
             vec<Sig> subset;
