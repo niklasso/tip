@@ -21,6 +21,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mcl/CircPrelude.h"
 #include "mcl/Clausify.h"
 #include "tip/liveness/Liveness.h"
+#include "tip/induction/Induction.h"
 
 namespace Tip {
 
@@ -30,9 +31,72 @@ using namespace Minisat;
 // Liveness Checking:
 //
 
+void checkLiveness(TipCirc& tip, LiveProp p, int k)
+{
+    printf("=== Liveness checking of property #%d with k=%d ===\n", p, k);
+    Sig just = tip.live_props[p].sigs[0];
+    Sig x = sig_True;
+    for ( int i = 0; i < k; i++ ) {
+        Gate y = gate(tip.main.mkInp());
+        Sig justx = tip.main.mkAnd(just,x);
+        tip.flps.define(y, tip.main.mkOr(justx,mkSig(y)));
+        x = mkSig(y);
+    }
+    tip.newSafeProp(~x);
+    printf("--- calling safety checker ---\n");
+    relativeInduction(tip);
+}
+
 void checkLiveness(TipCirc& tip, LiveProp p)
 {
-    return;
+    Solver solver;
+    Lit lit_False = mkLit(solver.newVar());
+    solver.addClause(~lit_False);
+    assert(tip.live_props[p].sigs.size() == 1);
+    
+    // initialize state
+    vec<Lit> state;
+    for( int i = 0; i < tip.flps.size(); i++ )
+        state.push(lit_False);
+    
+    // unroll
+    vec<Lit> props;
+    for( int t = 0; t < 100; t++ ) {
+        Clausifyer<Solver> cl(tip.main, solver);
+
+        // prev state
+        for( int i = 0; i < tip.flps.size(); i++ )
+            cl.clausifyAs(tip.flps[i], state[i]);
+        
+        // next state
+        for( int i = 0; i < tip.flps.size(); i++ )
+            state[i] = cl.clausify(tip.flps.next(tip.flps[i]));
+        
+        // prop
+        props.push(cl.clausify(tip.live_props[p].sigs[0]));
+    }
+    
+    // maximizing
+    printf("Maximizing (%d props)...\n", props.size());
+    int opt = 0;
+    while ( 1 ) {
+        // at least one of the (remaining) props should be true
+        solver.addClause(props);
+
+        // solve!
+        if ( !solver.solve() )
+            break;
+
+        // find all true props
+        for ( int i = 0; i < props.size(); i++ )
+          if ( solver.modelValue(props[i]) != l_False ) {
+              props[i] = props.last();
+              props.pop();
+          }
+          else
+              i++;
+    }
+    printf("True: %d (%d left)\n", opt, props.size());
 }
 
 void checkLiveness(TipCirc& tip)

@@ -19,6 +19,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "minisat/utils/Options.h"
 #include "tip/TipCirc.h"
+#include "tip/liveness/EmbedFairness.h"
+#include "tip/liveness/Liveness.h"
 
 using namespace Minisat;
 using namespace Tip;
@@ -29,6 +31,7 @@ int main(int argc, char** argv)
     setUsageHelp("USAGE: %s [options] <input-file> <result-output-file>\n\n  where input is in plain or gzipped binary AIGER.\n");
     IntOption bver ("MAIN", "bv",   "Version of BMC to be used.", 0, IntRange(0,2));
     IntOption depth("MAIN", "k",    "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
+    IntOption p    ("MAIN", "p",    "Which property to work on.", INT32_MAX, IntRange(0,INT32_MAX));
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
 
@@ -44,8 +47,10 @@ int main(int argc, char** argv)
     tc.readAiger(argv[1]);
     if (sce > 0) tc.sce(sce == 1, false);
 
+    embedFairness(tc);
     //tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
-    tc.trip();
+    //tc.trip();
+    checkLiveness(tc,p,depth);
     tc.printResults();
 
     if (argc == 3){
