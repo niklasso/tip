@@ -34,6 +34,7 @@ int main(int argc, char** argv)
     IntOption p    ("MAIN", "p",    "Which property to work on.", INT32_MAX, IntRange(0,INT32_MAX));
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
+    StringOption alg("MAIN", "alg", "Main model checking algorithm to use.\n", "rip");
 
     parseOptions(argc, argv, true);
 
@@ -47,10 +48,15 @@ int main(int argc, char** argv)
     tc.readAiger(argv[1]);
     if (sce > 0) tc.sce(sce == 1, false);
 
-    embedFairness(tc);
-    //tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
-    //tc.trip();
-    checkLiveness(tc,p,depth);
+    if (strcmp(alg, "bmc") == 0)
+        tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
+    else if (strcmp(alg, "rip") == 0)
+        tc.trip();
+    else if (strcmp(alg, "live") == 0){
+        embedFairness(tc);
+        checkLiveness(tc,p,depth);
+    }
+
     tc.printResults();
 
     if (argc == 3){
@@ -61,5 +67,4 @@ int main(int argc, char** argv)
     }
 
     return 0;
-    //exit(0);
 }
