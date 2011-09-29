@@ -34,7 +34,25 @@ using namespace Minisat;
 void checkLiveness(TipCirc& tip, LiveProp p, int k)
 {
     printf("=== Liveness checking of property #%d with k=%d ===\n", p, k);
+        
+    // preparing "just" signal
     Sig just = tip.live_props[p].sigs[0];
+    if ( tip.cnstrs.size() > 0 ) {
+        printf("Preparing for %d constraints.\n", tip.cnstrs.size());
+        Sig conj = sig_True;
+        for ( uint32_t i = 0; i < tip.cnstrs.size(); i++ ) {
+            ;
+            if ( tip.cnstrs[i].size() > 0 )
+                for ( int j = 0; j < tip.cnstrs[i].size(); j++ )
+                    conj = tip.main.mkAnd(conj, tip.main.mkOr(~(j > 0 ? tip.cnstrs[i][j-1] : tip.cnstrs[i].last()), tip.cnstrs[i][j]));
+        }
+
+        Gate next_conj = gate(tip.main.mkInp());
+        Sig conj_ = tip.main.mkAnd(mkSig(next_conj), conj);
+        tip.flps.define(next_conj, conj_, sig_True);
+        just = tip.main.mkAnd(just, conj_);
+    }
+    
     Sig x = sig_True;
     for ( int i = 0; i < k; i++ ) {
         Gate y = gate(tip.main.mkInp());
@@ -47,63 +65,11 @@ void checkLiveness(TipCirc& tip, LiveProp p, int k)
     relativeInduction(tip);
 }
 
-void checkLiveness(TipCirc& tip, LiveProp p)
-{
-    Solver solver;
-    Lit lit_False = mkLit(solver.newVar());
-    solver.addClause(~lit_False);
-    assert(tip.live_props[p].sigs.size() == 1);
-    
-    // initialize state
-    vec<Lit> state;
-    for( int i = 0; i < tip.flps.size(); i++ )
-        state.push(lit_False);
-    
-    // unroll
-    vec<Lit> props;
-    for( int t = 0; t < 100; t++ ) {
-        Clausifyer<Solver> cl(tip.main, solver);
-
-        // prev state
-        for( int i = 0; i < tip.flps.size(); i++ )
-            cl.clausifyAs(tip.flps[i], state[i]);
-        
-        // next state
-        for( int i = 0; i < tip.flps.size(); i++ )
-            state[i] = cl.clausify(tip.flps.next(tip.flps[i]));
-        
-        // prop
-        props.push(cl.clausify(tip.live_props[p].sigs[0]));
-    }
-    
-    // maximizing
-    printf("Maximizing (%d props)...\n", props.size());
-    int opt = 0;
-    while ( 1 ) {
-        // at least one of the (remaining) props should be true
-        solver.addClause(props);
-
-        // solve!
-        if ( !solver.solve() )
-            break;
-
-        // find all true props
-        for ( int i = 0; i < props.size(); i++ )
-          if ( solver.modelValue(props[i]) != l_False ) {
-              props[i] = props.last();
-              props.pop();
-          }
-          else
-              i++;
-    }
-    printf("True: %d (%d left)\n", opt, props.size());
-}
-
 void checkLiveness(TipCirc& tip)
 {
     for( LiveProp p = 0; p < tip.live_props.size(); p++ ) {
         printf("=== liveness property #%d\n", p);
-        checkLiveness(tip, p);
+        checkLiveness(tip, p, 10);
     }
 }
 
