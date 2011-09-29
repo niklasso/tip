@@ -41,8 +41,8 @@ void checkLiveness(TipCirc& tip, LiveProp p, int k)
         Sig justx = tip.main.mkAnd(just,x);
         tip.flps.define(y, tip.main.mkOr(justx,mkSig(y)));
         x = mkSig(y);
+        tip.newSafeProp(~x);
     }
-    tip.newSafeProp(~x);
     printf("--- calling safety checker ---\n");
     relativeInduction(tip);
 }
