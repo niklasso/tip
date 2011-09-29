@@ -33,6 +33,7 @@ void embedFairness(TipCirc& tip)
         printf("Joining %d triggers for liveness property #%d...\n", n, i);
         
         // check if we have more than 1 signal to take care of
+        Sig accept;
         if (n > 1) { 
             // (this method creates helper flops for every fairness signal
             // an alternative would be to do this once for all flops)
@@ -44,7 +45,7 @@ void embedFairness(TipCirc& tip)
             
             // create trigger signals and accept signal
             vec<Sig> triggers;
-            Sig accept = sig_True;
+            accept = sig_True;
             for (int j = 0; j < n; j++) {
                 triggers.push(tip.main.mkOr(fairs[j],mkSig(flops[j])));
                 accept = tip.main.mkAnd(accept, triggers[j]);
@@ -53,11 +54,13 @@ void embedFairness(TipCirc& tip)
             // define the flops
             for (int j = 0; j < n; j++)
                 tip.flps.define(flops[j], tip.main.mkAnd(~accept, triggers[j]));
-            
-            // set the new accept signal
-            tip.live_props[i].sigs.clear();
-            tip.live_props[i].sigs.push(accept);
-        }        
+        }
+        else
+            accept = fairs[0];
+        
+        // set the new accept signal
+        tip.live_props[i].sigs.clear();
+        tip.live_props[i].sigs.push(accept);
     }
     
     // clear fairness constraints (they are embedded in the liveness props now)
