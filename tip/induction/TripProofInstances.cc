@@ -118,6 +118,30 @@ namespace Tip {
         }
 
 
+        void shrinkConflict(SimpSolver& s, vec<Lit>& keep, vec<Lit>& try_remove)
+        {
+            vec<Lit> ass;
+            vec<Lit> smaller;
+
+            s.extend_model = false;
+            while(try_remove.size() > 0){
+                keep.copyTo(ass);
+                for (int i = 0; i < try_remove.size()-1; i++)
+                    ass.push(try_remove[i]);
+
+                if (s.solve(ass)){
+                    keep.push(try_remove.last());
+                    try_remove.pop();
+                }else{
+                    // TODO: could also remove elements in try_remove that is not (negated) in
+                    // s.conflict.
+                    try_remove.pop();
+                }
+            }
+            s.extend_model = true;
+        }
+
+
         void shrinkModelOnce(SimpSolver& s, LitSet& xs, const vec<Lit>& top)
         {
             for (int i = 0; i < xs.size(); i++)
@@ -233,9 +257,45 @@ namespace Tip {
         }
     };
 
-    bool InitInstance::prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next)
+
+    void InitInstance::reduceClause(Clause& c)
     {
-        assert(next == NULL || &c == (Clause*)&*next);
+        vec<SigLitPair> slits;
+        for (unsigned i = 0; i < c.size(); i++){
+            SigLitPair p;
+            p.x   = c[i];
+            Sig x = tip.flps.next(gate(p.x)) ^ sign(p.x);
+            p.l   = umapl[1][gate(x)] ^ sign(x);
+            slits.push(p);
+        }
+
+        sort(slits, SigLitCmp());
+        
+        // TODO: maybe prefer "larger" flops while removing duplicates.
+        int i,j;
+        for (i = j = 1; i < slits.size(); i++)
+            if (slits[i].l != slits[j-1].l)
+                slits[j++] = slits[i];
+        slits.shrink(i-j);
+
+        vec<Sig> d;
+        for (i = 0; i < slits.size(); i++)
+            d.push(slits[i].x);
+
+        c = Clause(d, c.cycle);
+    }
+
+
+    bool InitInstance::prove(const Clause& c_, const Clause& bot, 
+                             Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next)
+    {
+        assert(next == NULL || &c_ == (Clause*)&*next);
+        assert(subsumes(bot, c_));
+
+        Clause c = c_;
+        reduceClause(c);
+
+        // TODO: special-cases for trivially satisfiable/unsatisfiable situations?
 
         vec<Lit> assumes;
         for (unsigned i = 0; i < c.size(); i++){
@@ -262,13 +322,13 @@ namespace Tip {
                 vec<Sig>         dummy;
                 SharedRef<ScheduledClause> pred0   (new ScheduledClause(dummy, 0, frames[1], next));
                 SharedRef<ScheduledClause> pred_rst(new ScheduledClause(dummy, 0, frames[0], pred0));
-                //printf("[InitInstance::prove] pred0 = %p, pred_rst = %p\n", pred0, pred_rst);
+
                 no = pred_rst;
             }
             result = false;
         }else{
             // Proved the clause:
-
+#if 0
             // Minimize reason more:
             int n_before = solver->conflict.size();
             shrinkConflict(*solver);
@@ -276,31 +336,53 @@ namespace Tip {
                 printf("[InitInstance::prove] expensive conflict shrink: %d => %d\n",
                        n_before, solver->conflict.size());
 
-            vec<SigLitPair> slits;
+            vec<Sig> subset;
             for (unsigned i = 0; i < c.size(); i++){
-                SigLitPair p;
-                p.x   = c[i];
-                Sig x = tip.flps.next(gate(p.x)) ^ sign(p.x);
-                p.l   = umapl[1][gate(x)] ^ sign(x);
-                slits.push(p);
+                Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
+                Lit l = umapl[1][gate(x)] ^ sign(x);
+                if (find(solver->conflict, l))
+                    subset.push(c[i]);
             }
 
-            sort(slits, SigLitCmp());
-            
-            int i,j;
-            for (i = j = 1; i < slits.size(); i++)
-                if (slits[i].l != slits[j-1].l)
-                    slits[j++] = slits[i];
-            slits.shrink(i-j);
+            yes = Clause(subset, 0);
+#else
+            Clause   try_remove(c - bot);
+            vec<Lit> keep;
+            vec<Lit> may_remove;
 
-            if (tip.verbosity >= 4 && i - j > 0)
-                printf("[InitInstance::prove] potential reason shrunk with: %d\n", i - j);
+            // printf(" ... bot = ");
+            // printClause(tip, bot);
+            // printf("\n");
+            // 
+            // printf(" ... try_remove = ");
+            // printClause(tip, try_remove);
+            // printf("\n");
+
+            for (unsigned i = 0; i < bot.size(); i++){
+                Sig x = tip.flps.next(gate(bot[i])) ^ sign(bot[i]);
+                Lit l = umapl[1][gate(x)] ^ sign(x);
+                keep.push(~l);
+            }
+
+            for (unsigned i = 0; i < try_remove.size(); i++){
+                Sig x = tip.flps.next(gate(try_remove[i])) ^ sign(try_remove[i]);
+                Lit l = umapl[1][gate(x)] ^ sign(x);
+                may_remove.push(~l);
+            }
+
+            shrinkConflict(*solver, keep, may_remove);
+            check(!solver->solve(keep));
 
             vec<Sig> subset;
-            for (int i = 0; i < slits.size(); i++)
-                if (find(solver->conflict, slits[i].l))
-                    subset.push(slits[i].x);
-            yes = Clause(subset, 0);
+            for (unsigned i = 0; i < try_remove.size(); i++){
+                Sig x = tip.flps.next(gate(try_remove[i])) ^ sign(try_remove[i]);
+                Lit l = umapl[1][gate(x)] ^ sign(x);
+                if (find(keep, ~l))
+                    subset.push(try_remove[i]);
+            }
+
+            yes = bot + Clause(subset, 0);
+#endif
             result = true;
         }
         solver->extend_model = true;
@@ -309,10 +391,10 @@ namespace Tip {
     }
 
 
-    bool InitInstance::prove(const Clause& c, Clause& yes)
+    bool InitInstance::prove(const Clause& c, const Clause& bot, Clause& yes)
     {
         SharedRef<ScheduledClause> dummy;
-        return prove(c, yes, dummy);
+        return prove(c, bot, yes, dummy);
     }
 
 
@@ -625,8 +707,6 @@ namespace Tip {
                 if (find(solver->conflict, l))
                     subset.push(c[i]);
             }
-            assert(subset.size() > 0);
-
             // What level was sufficient?
             unsigned k = cycle_Undef;
             if (c.cycle != cycle_Undef)
@@ -635,7 +715,14 @@ namespace Tip {
                         k = i+1;
                         break;
                     }
-            //printf("[StepInstance::prove] c.cycle = %d, k = %d\n", c.cycle, k);
+
+            assert(solver->okay());
+
+            // TODO: is this ok? When it doesn't hold it means that the clause didn't hold in the
+            // previous cycle, and assuming the induction-hyptothesis was enough to derive the
+            // contradiction. This is suprising but may be ok in some situations.
+            // assert(subset.size() > 0);
+
             yes = Clause(subset, k);
             //printf("[StepInstance::prove] &yes = %p\n", &yes);
             result = true;

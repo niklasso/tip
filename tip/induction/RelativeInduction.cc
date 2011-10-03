@@ -68,7 +68,7 @@ namespace Tip {
             bool             proveStep(const Clause& c, Clause& yes);
 
             // Find a maximal generalization of c that still is subsumed by init.
-            void             generalize(const Clause& init, Clause& c);
+            void             generalize(Clause& c);
 
             // PROVE:   let k = F.size()-1: F_inv ^ F[k] ^ Trans => p'
             // RETURNS: l_True if the property is implied by the invariants alone,
@@ -154,25 +154,44 @@ namespace Tip {
             void printStats(unsigned curr_cycle = cycle_Undef, bool newline = true);
         };
 
-        bool Trip::proveInit(SharedRef<ScheduledClause> c, Clause& yes, SharedRef<ScheduledClause>& no){ 
-            return init.prove(*c, yes, no, c);
-        }
+        // bool Trip::proveInit(SharedRef<ScheduledClause> c, Clause& yes, SharedRef<ScheduledClause>& no){ 
+        //     return init.prove(*c, *c, yes, no, c);
+        // }
+        // 
+        // bool Trip::proveInit(const Clause& c, Clause& yes){
+        //     return init.prove(c, c, yes);
+        // }
 
-        bool Trip::proveInit(const Clause& c, Clause& yes){
-            return init.prove(c, yes);
-        }
 
-
-        void Trip::generalize(const Clause& ic, Clause& c)
+        void Trip::generalize(Clause& c)
         {
-            Clause try_remove = c - ic;
-            Clause d,e;
+            Clause try_remove = c;
+            Clause d          = c;
+            Clause e;
 
-            c = ic + c;
-            for (unsigned i = 0; i < try_remove.size(); i++)
-                if (find(c, try_remove[i]))
-                    if (step.prove(c - try_remove[i], d))
-                        c = ic + d;
+            // printf("[generalize] begin d = ");
+            // printClause(d);
+            // printf("\n");
+            for (unsigned i = 0; d.size() > 1 && i < try_remove.size(); i++)
+                if (find(d, try_remove[i])){
+                    Clause cand = d - try_remove[i];
+                    // printf("[generalize] cand = ");
+                    // printClause(cand);
+                    // printf("\n");
+                    if (step.prove(cand, e) && init.prove(cand, e, d)){
+                        assert(subsumes(d, cand));
+                        // printf("[generalize] refine d = ");
+                        // printClause(d);
+                        // printf("\n");
+                    }
+                }
+            assert(subsumes(d, c));
+            c = d;
+            // printf("[generalize] done c = ");
+            // printClause(c);
+            // printf("\n");
+            assert(init.prove(c, c, e));
+            assert(step.prove(c, e));
         }
 
 
@@ -180,18 +199,21 @@ namespace Tip {
         {
             Clause yes_init, yes_step;
             if (c->cycle == 0){
-                if (!init.prove(*c, yes_init, no, c))
+                Clause empty;
+                // printf("[proveAndGeneralize] cycle-0:\n");
+                if (!init.prove(*c, empty, yes_init, no, c))
                     return false;
                 yes_step = yes_init;
             }else{
                 if (!step.prove(*c, yes_step, no, c))
                     return false;
                 
-                check(proveInit(*c, yes_init));
+                //check(proveInit(*c, yes_init));
+                check(init.prove(*c, yes_step, yes_init));
+                assert(subsumes(yes_step, yes_init));
+                yes_step = yes_init;
 #ifdef GENERALIZE_THEN_PUSH
-                generalize(yes_init, yes_step);
-#else
-                yes_step = yes_init + yes_step;
+                generalize(yes_step);
 #endif
             }
 
@@ -205,11 +227,13 @@ namespace Tip {
                 d.cycle++;
                 if (!step.prove(d, yes_step))
                     break;
-                yes_step = yes_init + yes_step;
+                check(init.prove(d, yes_step, yes_init));
+                assert(subsumes(yes_step, yes_init));
+                yes_step = yes_init;
             }
 
 #ifndef GENERALIZE_THEN_PUSH
-            generalize(yes_init, yes_step);
+            generalize(yes_step);
 #endif
 
             yes = yes_step;
@@ -231,7 +255,8 @@ namespace Tip {
                 printf("[proveStep] clause was proved in the future: %d -> %d\n",
                        c.cycle, yes_step.cycle);
 
-            check(proveInit(c, yes_init));
+            //check(proveInit(c, yes_init));
+            check(init.prove(c, yes_step, yes_init));
 
             // Calculate union of the two strengthened clauses:
             yes = yes_init + yes_step;
@@ -321,6 +346,14 @@ namespace Tip {
                         n_removed++, delete F[k][i];
                 F[k].shrink(i - j);
             }
+            int i,j;
+            for (i = j = 0; i < F_inv.size(); i++)
+                if (F_inv[i]->isActive())
+                    F_inv[j++] = F_inv[i];
+                else
+                    n_removed++, delete F_inv[i];
+            F_inv.shrink(i - j);
+
             if (tip.verbosity >= 4)
                 printf("[clearInactive] removed %d inactive clauses\n", n_removed);
         }
@@ -381,6 +414,10 @@ namespace Tip {
             assert(!fwdSubsumed(&c_));
             n_total++;
 
+            // printf("[addClause] c = ");
+            // printClause(c);
+            // printf("\n");
+
             prop.addClause(c);
             step.addClause(c);
 
@@ -430,8 +467,9 @@ namespace Tip {
                             }
                     printf("[extractInvariant] extracted invariant of size %d\n", inv_size);
             
+                    // TODO: can we change this assertion to something less strict?
                     // Check that the invariant is non-empty:
-                    assert(inv_size > 0);
+                    // assert(inv_size > 0);
 
                     return;
                 }

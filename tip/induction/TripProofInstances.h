@@ -111,8 +111,10 @@ namespace Tip {
         InitInstance(const TipCirc& t_);
         ~InitInstance();
         
-        bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
-        bool prove(const Clause& c, Clause& yes);
+        bool prove(const Clause& c, const Clause& bot, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
+        bool prove(const Clause& c, const Clause& bot, Clause& yes);
+
+        void reduceClause(Clause& c);
 
         void printStats();
     };
