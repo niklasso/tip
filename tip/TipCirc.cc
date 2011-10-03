@@ -117,7 +117,7 @@ namespace Tip {
                 n_unknown++;
 
         printf("Verification results\n");
-        printf("====================\n");
+        printf("================================================================================\n");
         printf("  Proved :    %d\n", n_proved);
         printf("  Falsified : %d\n", n_falsified);
         printf("  Unknown:    %d\n", n_unknown);

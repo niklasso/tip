@@ -504,7 +504,8 @@ namespace Tip {
         }
 
 
-        void Trip::printInvariant(){
+        void Trip::printInvariant()
+        {
             for (int i = 0; i < F_inv.size(); i++)
                 if (F_inv[i]->isActive()){
                     const Clause& c = *F_inv[i];
@@ -512,6 +513,93 @@ namespace Tip {
                     printClause(c);
                     printf("\n");
                 }
+        }
+
+
+        void Trip::verifyInvariant()
+        {
+            double time_before = cpuTime();
+            clearInactive();
+
+            Solver             s;
+            Clausifyer<Solver> cl0(tip.main, s), cl1(tip.main, s);
+            Clausifyer<Solver> cli(tip.init, s);
+
+            // Clausify-connect two cycles of the circuit:
+            for (int i = 0; i < tip.flps.size(); i++)
+                cl1.clausifyAs(tip.flps[i], cl0.clausify(tip.flps.next(tip.flps[i])));
+
+            // Add all clauses to cycle 0:
+            for (int i = 0; i < F_inv.size(); i++){
+                assert(F_inv[i]->isActive());
+
+                const Clause& c = *F_inv[i];
+                vec<Lit>      cs;
+
+                for (unsigned j = 0; j < c.size(); j++)
+                    cs.push(cl0.clausify(c[j]));
+
+                s.addClause(cs);
+            }
+
+            // Verify that clauses are invariant:
+            int num_failed = 0;
+            for (int i = 0; i < F_inv.size(); i++){
+                assert(F_inv[i]->isActive());
+
+                const Clause& c = *F_inv[i];
+                vec<Lit>      cs;
+                for (unsigned j = 0; j < c.size(); j++)
+                    cs.push(~cl1.clausify(c[j]));
+
+                if (s.solve(cs))
+                    num_failed++;
+            }
+
+            if (num_failed > 0){
+                printf("WARNING! %d clauses are not implied by the candidate invariant.\n", num_failed);
+                exit(211); }
+            //printf("[verifyInvariant] invariant checked (step) cpu-time = %.2f s\n", cpuTime() - time_before);
+
+            // Verify that properties are implied by the invariant:
+            num_failed = 0;
+            for (SafeProp p = 0; p < tip.safe_props.size(); p++)
+                if (tip.safe_props[p].stat == pstat_Proved)
+                    if (s.solve(~cl1.clausify(tip.safe_props[p].sig)))
+                        num_failed++;
+
+            if (num_failed > 0){
+                printf("WARNING! %d properties are not implied by the candidate invariant.\n", num_failed);
+                exit(212); }
+            //printf("[verifyInvariant] properties checked cpu-time = %.2f s\n", cpuTime() - time_before);
+
+            // Clausify-connect cycle 0 to the initial circuit:
+            for (int i = 0; i < tip.flps.size(); i++)
+                cli.clausifyAs(tip.flps.init(tip.flps[i]), cl0.clausify(tip.flps[i]));
+
+            // Verify that clauses hold in cycle 1:
+            num_failed = 0;
+            for (int i = 0; i < F_inv.size(); i++){
+                assert(F_inv[i]->isActive());
+
+                const Clause& c = *F_inv[i];
+                vec<Lit>      cs;
+                for (unsigned j = 0; j < c.size(); j++)
+                    cs.push(~cl1.clausify(c[j]));
+
+                if (s.solve(cs))
+                    num_failed++;
+            }
+            //printf("[verifyInvariant] invariant checked (base) cpu-time = %.2f s\n", cpuTime() - time_before);
+
+            if (num_failed > 0){
+                printf("WARNING! %d clauses not true in cycle 1.\n", num_failed);
+                exit(213);
+            }
+
+            printf("\n");
+            printf("INVARIANT VERIFIED (cpu-time %.2f s)\n", cpuTime() - time_before);
+            printf("\n");
         }
 
 
@@ -696,18 +784,20 @@ namespace Tip {
             while (!trip.decideCycle())
                 trip.printStats();
 
-        if (tip.verbosity >= 3){
-            // If some property was proved, print the invariant:
-            for (SafeProp p = 0; p < tip.safe_props.size(); p++)
-                if (tip.safe_props[p].stat == pstat_Proved){
+        // If some property was proved, print the invariant:
+        for (SafeProp p = 0; p < tip.safe_props.size(); p++)
+            if (tip.safe_props[p].stat == pstat_Proved){
+                trip.verifyInvariant();
+                if (tip.verbosity >= 3){
                     printf("[relativeInduction] invariant:\n");
-                    trip.printInvariant();
-                    break;
-                }
-        }
+                    trip.printInvariant(); }
+                break;
+            }
 
-        if (tip.verbosity >= 1)
-            printf("CPU Time: %6.2f s\n", cpuTime() - time_before);
+        printf("Trip statistics:\n");
+        printf("================================================================================\n");
+        printf("CPU time: %.2f s\n", cpuTime() - time_before);
+        printf("\n");
     }
 
 
