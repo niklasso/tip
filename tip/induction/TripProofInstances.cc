@@ -27,6 +27,12 @@ namespace Tip {
 
     namespace {
 
+        template<class Lits>
+        void printLits(const Lits& cs){
+            for (int i = 0; i < cs.size(); i++)
+                printf("%s%d ", sign(cs[i])?"-":"", var(cs[i]));
+        }
+
         void extractResetInputs(const TipCirc& tip, const GMap<Sig>& umap, 
                                 Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl, vec<Lit>& xs)
         {
@@ -136,6 +142,32 @@ namespace Tip {
                     // TODO: could also remove elements in try_remove that is not (negated) in
                     // s.conflict.
                     try_remove.pop();
+                }
+            }
+            s.extend_model = true;
+        }
+
+
+        void shrinkConflict(SimpSolver& s, LitSet& keep, vec<Lit>& try_remove)
+        {
+            vec<Lit> ass;
+            vec<Lit> smaller;
+            s.extend_model = false;
+            while(try_remove.size() > 0){
+                keep.copyTo(ass);
+                for (int i = 0; i < try_remove.size()-1; i++)
+                    ass.push(try_remove[i]);
+
+                if (s.solve(ass)){
+                    keep.push(try_remove.last());
+                    try_remove.pop();
+                }else{
+                    smaller.clear();
+                    for (int i = 0; i < s.conflict.size(); i++)
+                        if (!keep.has(~s.conflict[i]))
+                            smaller.push(~s.conflict[i]);
+                    assert(smaller.size() < try_remove.size());
+                    smaller.moveTo(try_remove);
                 }
             }
             s.extend_model = true;
@@ -328,35 +360,9 @@ namespace Tip {
             result = false;
         }else{
             // Proved the clause:
-#if 0
-            // Minimize reason more:
-            int n_before = solver->conflict.size();
-            shrinkConflict(*solver);
-            if (tip.verbosity >= 4 && solver->conflict.size() < n_before)
-                printf("[InitInstance::prove] expensive conflict shrink: %d => %d\n",
-                       n_before, solver->conflict.size());
-
-            vec<Sig> subset;
-            for (unsigned i = 0; i < c.size(); i++){
-                Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
-                Lit l = umapl[1][gate(x)] ^ sign(x);
-                if (find(solver->conflict, l))
-                    subset.push(c[i]);
-            }
-
-            yes = Clause(subset, 0);
-#else
             Clause   try_remove(c - bot);
             vec<Lit> keep;
             vec<Lit> may_remove;
-
-            // printf(" ... bot = ");
-            // printClause(tip, bot);
-            // printf("\n");
-            // 
-            // printf(" ... try_remove = ");
-            // printClause(tip, try_remove);
-            // printf("\n");
 
             for (unsigned i = 0; i < bot.size(); i++){
                 Sig x = tip.flps.next(gate(bot[i])) ^ sign(bot[i]);
@@ -370,19 +376,40 @@ namespace Tip {
                 may_remove.push(~l);
             }
 
-            shrinkConflict(*solver, keep, may_remove);
-            check(!solver->solve(keep));
+            // FIXME: allow duplicates in 'keep's literal set?
+            // FIXME: detecting unit_conflict no longer necessary.
 
-            vec<Sig> subset;
-            for (unsigned i = 0; i < try_remove.size(); i++){
-                Sig x = tip.flps.next(gate(try_remove[i])) ^ sign(try_remove[i]);
-                Lit l = umapl[1][gate(x)] ^ sign(x);
-                if (find(keep, ~l))
-                    subset.push(try_remove[i]);
+            // Remove duplicates and detect unit conflict in 'keep' set (i.e. 'x' and '~x'):
+            bool unit_conflict = false;
+            {
+                vec<Lit> slask; 
+                keep.copyTo(slask);
+                sort(slask);
+                int i,j;
+                for (i = j = 1; i < slask.size(); i++){
+                    if (slask[i] == ~slask[i-1]){
+                        unit_conflict = true;
+                    }else if (slask[i] != slask[i-1])
+                        slask[j++] = slask[i];
+                }
+                slask.shrink(i - j);
+                lset.fromVec(slask);
             }
 
-            yes = bot + Clause(subset, 0);
-#endif
+            vec<Sig> subset;
+            if (!unit_conflict){
+                shrinkConflict(*solver, lset, may_remove);
+                //lset.copyTo(keep);
+                //check(!solver->solve(keep));
+                for (unsigned i = 0; i < try_remove.size(); i++){
+                    Sig x = tip.flps.next(gate(try_remove[i])) ^ sign(try_remove[i]);
+                    Lit l = umapl[1][gate(x)] ^ sign(x);
+                    if (lset.has(~l))
+                        subset.push(try_remove[i]);
+                }
+            }
+
+            yes    = bot + Clause(subset, 0);
             result = true;
         }
         solver->extend_model = true;
@@ -469,13 +496,6 @@ namespace Tip {
         solver->eliminate(true);
         solver->thaw();
         trigg = mkLit(solver->newVar());
-    }
-
-
-    template<class Lits>
-    void printLits(const Lits& cs){
-        for (int i = 0; i < cs.size(); i++)
-            printf("%s%d ", sign(cs[i])?"-":"", var(cs[i]));
     }
 
 

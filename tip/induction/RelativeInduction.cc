@@ -169,27 +169,31 @@ namespace Tip {
             Clause d          = c;
             Clause e;
 
-            // printf("[generalize] begin d = ");
-            // printClause(d);
-            // printf("\n");
+            if (tip.verbosity >= 3){
+                printf("[generalize] begin d = ");
+                printClause(d);
+                printf("\n"); }
             for (unsigned i = 0; d.size() > 1 && i < try_remove.size(); i++)
                 if (find(d, try_remove[i])){
                     Clause cand = d - try_remove[i];
-                    // printf("[generalize] cand = ");
-                    // printClause(cand);
-                    // printf("\n");
+                    if (tip.verbosity >= 3){
+                        printf("[generalize] cand = ");
+                        printClause(cand);
+                        printf("\n"); }
                     if (step.prove(cand, e) && init.prove(cand, e, d)){
                         assert(subsumes(d, cand));
-                        // printf("[generalize] refine d = ");
-                        // printClause(d);
-                        // printf("\n");
+                        if (tip.verbosity >= 3){
+                            printf("[generalize] refine d = ");
+                            printClause(d);
+                            printf("\n"); }
                     }
                 }
             assert(subsumes(d, c));
             c = d;
-            // printf("[generalize] done c = ");
-            // printClause(c);
-            // printf("\n");
+            if (tip.verbosity >= 3){
+                printf("[generalize] done c = ");
+                printClause(c);
+                printf("\n");}
             assert(init.prove(c, c, e));
             assert(step.prove(c, e));
         }
@@ -771,7 +775,6 @@ namespace Tip {
             F.push();
             F_size.push(0);
             prop.clearClauses();
-
             if (pushClauses()){
                 printStats();
                 // All remaining properties proved:
