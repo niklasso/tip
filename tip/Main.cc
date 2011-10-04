@@ -18,12 +18,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include "minisat/utils/Options.h"
+#include "minisat/utils/System.h"
 #include "tip/TipCirc.h"
 #include "tip/liveness/EmbedFairness.h"
 #include "tip/liveness/Liveness.h"
 
 using namespace Minisat;
 using namespace Tip;
+
+static void SIGINT_exit(int) {
+    printf("\n"); printf("*** INTERRUPTED ***\n");
+    // TMP: should call _exit() to avoid stupid malloc deadlocks, but we do this to simplify
+    // profiling of long running jobs.
+    exit(1); }
 
 int main(int argc, char** argv)
 {
@@ -40,6 +47,8 @@ int main(int argc, char** argv)
 
     if (argc < 2 || argc > 3)
         printUsageAndExit(argc, argv);
+
+    sigTerm(SIGINT_exit);
 
     TipCirc tc;
     tc.verbosity = verb;
