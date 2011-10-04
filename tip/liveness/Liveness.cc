@@ -28,6 +28,85 @@ namespace Tip {
 using namespace Minisat;
 
 //=================================================================================================
+// Finding Safety Constraints:
+//
+
+void findSafetyConstraints(TipCirc& tip, LiveProp p)
+{
+    printf("=== Finding Safety Constraints ===\n");
+    
+    Solver solver;
+    Clausifyer<Solver> cl1(tip.main,solver);
+
+    // gather constraints candidates
+    vec<Sig> constr;
+    for (GateIt git = tip.main.begin(); git != tip.main.end(); ++git) {
+      constr.push(mkSig(*git));
+      constr.push(~mkSig(*git));
+      cl1.clausify(*git);
+    }
+
+    // making sure that the property is implied
+    Lit just = cl1.clausify(tip.live_props[p].sigs[0]);
+    while ( solver.solve(just) ) {
+        printf("Refining constraint by property (size %d)...\n", constr.size());
+        // removing those candidates which are true now
+        vec<Lit> clause;
+        int i = 0;
+        while ( i < constr.size() ) {
+            Lit x = cl1.clausify(constr[i]);
+            if ( solver.modelValue(x) == l_True ) {
+                constr[i] = constr.last();
+                constr.pop();
+            } else {
+                clause.push(x);
+                i++;
+            }
+        }
+        
+        // adding new clause
+        solver.addClause_(clause);
+    }
+
+    // glue instances together
+    Clausifyer<Solver> cl2(tip.main,solver);
+    for (int i = 0; i < tip.flps.size(); i++)
+      cl2.clausifyAs(tip.flps[i], cl1.clausify(tip.flps.next(tip.flps[i])));
+    
+    // making sure that they are invariant
+    while ( 1 ) {
+        printf("Refining constraint by invariant (size %d)...\n", constr.size());
+        // creating assumptions
+        vec<Lit> assump;
+        for ( int i = 0; i < constr.size(); i++ )
+            assump.push(cl2.clausify(constr[i]));
+        
+        // solving...
+        if ( !solver.solve(assump) )
+            break;
+
+        // removing those candidates which are true now
+        vec<Lit> clause;
+        int i = 0;
+        while ( i < constr.size() ) {
+            Lit x = cl1.clausify(constr[i]);
+            if ( solver.modelValue(x) == l_True ) {
+                constr[i] = constr.last();
+                constr.pop();
+            } else {
+                clause.push(x);
+                i++;
+            }
+        }
+        
+        // adding new clause
+        solver.addClause_(clause);
+    }
+
+    printf("Found constraint of size %d.\n", constr.size());
+}
+
+//=================================================================================================
 // Liveness Checking:
 //
 
@@ -53,6 +132,8 @@ void checkLiveness(TipCirc& tip, LiveProp p, int k)
         just = tip.main.mkAnd(just, conj_);
     }
     
+    findSafetyConstraints(tip,p);
+
     Sig x = sig_True;
     for ( int i = 0; i < k; i++ ) {
         Gate y = gate(tip.main.mkInp());
