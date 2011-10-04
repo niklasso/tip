@@ -55,13 +55,13 @@ namespace Tip {
 
 
     class LitSet {
-        VMap<lbool> in_set;
-        vec<Lit>    set; // TODO: not really necessary to store literals, variables should suffice.
+        LMap<char> in_set;
+        vec<Lit>   set;
 
         void clear()
         {
             for (int i = 0; i < set.size(); i++)
-                in_set[var(set[i])] = l_Undef;
+                in_set[set[i]] = 0;
             set.clear();
         }
 
@@ -69,11 +69,13 @@ namespace Tip {
         void fromModel(const vec<Lit>& xs, const SimpSolver& s)
         {
             clear();
-            in_set.reserve(s.nVars()-1, l_Undef);
+            in_set.reserve(~mkLit(s.nVars()-1), 0);
             for (int i = 0; i < xs.size(); i++){
                 assert(s.modelValue(xs[i]) != l_Undef);
-                set.push(xs[i] ^ (s.modelValue(xs[i]) == l_False));
-                in_set[var(xs[i])] = s.modelValue(xs[i]);
+                Lit x = xs[i] ^ (s.modelValue(xs[i]) == l_False);
+                assert(in_set[x] == 0);
+                set.push(x);
+                in_set[x] = 1;
             }
         }
 
@@ -82,17 +84,41 @@ namespace Tip {
             clear();
             for (int i = 0; i < xs.size(); i++){
                 set.push(xs[i]);
-                in_set.reserve(var(xs[i]), l_Undef);
-                in_set[var(xs[i])] = lbool(!sign(xs[i]));
+                in_set.reserve(xs[i], 0);
+                assert(in_set[xs[i]] == 0);
+                in_set[xs[i]] = 1;
             }
         }
 
         int   size      ()       const { return set.size(); }
         Lit   operator[](int i)  const { return set[i]; }
+        Lit   last      ()       const { return set.last(); }
+        void  pop       ()             { 
+            // Note: assumes that there were no duplicates in the 'set' vector:
+            Lit x = set.last();
+            set.pop();
+            in_set[x] = 0;
+        }
+
+        void  push      (Lit l){ 
+            set.push(l);
+            in_set.reserve(l, 0);
+            assert(in_set[l] == 0);
+            in_set[l] = 1;
+        }
+
         void  copyTo    (vec<Lit>& out) const { set.copyTo(out); }
 
-        lbool has(Var v) const { return in_set.has(v) ? in_set[v] : l_Undef; }
-        bool  has(Lit l) const { return in_set.has(var(l)) && (in_set[var(l)] ^ sign(l)) == l_True; }
+        lbool has(Var v) const { 
+            if (in_set.has(mkLit(v)) && in_set[mkLit(v)])
+                return l_True;
+            else if (in_set.has(~mkLit(v)) && in_set[~mkLit(v)])
+                return l_False;
+            else
+                return l_Undef;
+        }
+
+        bool  has(Lit l) const { return in_set.has(l) && in_set[l]; }
     };
 
 
