@@ -70,12 +70,14 @@ namespace Tip {
         {
             clear();
             in_set.reserve(~mkLit(s.nVars()-1), 0);
+
             for (int i = 0; i < xs.size(); i++){
                 assert(s.modelValue(xs[i]) != l_Undef);
                 Lit x = xs[i] ^ (s.modelValue(xs[i]) == l_False);
-                assert(in_set[x] == 0);
-                set.push(x);
-                in_set[x] = 1;
+                if (!has(x)){
+                    set.push(x);
+                    in_set[x] = 1;
+                }
             }
         }
 
@@ -97,6 +99,7 @@ namespace Tip {
             // Note: assumes that there were no duplicates in the 'set' vector:
             Lit x = set.last();
             set.pop();
+            assert(in_set[x] == 1);
             in_set[x] = 0;
         }
 
