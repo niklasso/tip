@@ -22,88 +22,84 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mcl/Clausify.h"
 #include "tip/liveness/Liveness.h"
 #include "tip/induction/Induction.h"
+#include "tip/unroll/Bmc.h"
 
 namespace Tip {
 
 using namespace Minisat;
 
 //=================================================================================================
-// Finding Safety Constraints:
+// Liveness Checking:
 //
 
-void findSafetyConstraints(TipCirc& tip, LiveProp p)
+void embedLivenessBiere(TipCirc& tip, LiveProp p)
 {
-    printf("=== Finding Safety Constraints ===\n");
-    
-    Solver solver;
-    Clausifyer<Solver> cl1(tip.main,solver);
+    printf("=== Biere-trick  for property %d ===\n", p);
 
-    // gather constraints candidates
-    vec<Sig> constr;
-    for (GateIt git = tip.main.begin(); git != tip.main.end(); ++git) {
-      constr.push(mkSig(*git));
-      constr.push(~mkSig(*git));
-      cl1.clausify(*git);
-    }
-
-    // making sure that the property is implied
-    Lit just = cl1.clausify(tip.live_props[p].sigs[0]);
-    while ( solver.solve(just) ) {
-        printf("Refining constraint by property (size %d)...\n", constr.size());
-        // removing those candidates which are true now
-        vec<Lit> clause;
-        int i = 0;
-        while ( i < constr.size() ) {
-            Lit x = cl1.clausify(constr[i]);
-            if ( solver.modelValue(x) == l_True ) {
-                constr[i] = constr.last();
-                constr.pop();
-            } else {
-                clause.push(x);
-                i++;
-            }
+    // preparing "just" signal for constraints
+    Sig just = tip.live_props[p].sigs[0];
+    if ( tip.cnstrs.size() > 0 ) {
+        printf("Preparing for %d constraints.\n", tip.cnstrs.size());
+        Sig conj = sig_True;
+        for ( uint32_t i = 0; i < tip.cnstrs.size(); i++ ) {
+            ;
+            if ( tip.cnstrs[i].size() > 0 )
+                for ( int j = 0; j < tip.cnstrs[i].size(); j++ )
+                    conj = tip.main.mkAnd(conj, tip.main.mkOr(~(j > 0 ? tip.cnstrs[i][j-1] : tip.cnstrs[i].last()), tip.cnstrs[i][j]));
         }
-        
-        // adding new clause
-        solver.addClause_(clause);
-    }
 
-    // glue instances together
-    Clausifyer<Solver> cl2(tip.main,solver);
-    for (int i = 0; i < tip.flps.size(); i++)
-      cl2.clausifyAs(tip.flps[i], cl1.clausify(tip.flps.next(tip.flps[i])));
+        Gate next_conj = gate(tip.main.mkInp());
+        Sig conj_ = tip.main.mkAnd(mkSig(next_conj), conj);
+        tip.flps.define(next_conj, conj_, sig_True);
+        just = tip.main.mkAnd(just, conj_);
+    }
     
-    // making sure that they are invariant
-    while ( 1 ) {
-        printf("Refining constraint by invariant (size %d)...\n", constr.size());
-        // creating assumptions
-        vec<Lit> assump;
-        for ( int i = 0; i < constr.size(); i++ )
-            assump.push(cl2.clausify(constr[i]));
-        
-        // solving...
-        if ( !solver.solve(assump) )
-            break;
-
-        // removing those candidates which are true now
-        vec<Lit> clause;
-        int i = 0;
-        while ( i < constr.size() ) {
-            Lit x = cl1.clausify(constr[i]);
-            if ( solver.modelValue(x) == l_True ) {
-                constr[i] = constr.last();
-                constr.pop();
-            } else {
-                clause.push(x);
-                i++;
-            }
-        }
-        
-        // adding new clause
-        solver.addClause_(clause);
+    // implementing Biere circuit
+    Sig save = tip.main.mkInp();
+    
+    // copying flops
+    vec<Gate> s_orig;
+    vec<Gate> s_copy;
+    int nflops = tip.flps.size(); // important to save this, since it will change in the loop!
+    for (int i = 0; i < nflops; i++) {
+        Gate s_o = tip.flps[i];
+        Gate s_c = gate(tip.main.mkInp());
+        s_orig.push(s_o);
+        s_copy.push(s_c);
+        tip.flps.define(s_c, tip.main.mkMux(save, mkSig(s_o), mkSig(s_c)), tip.flps.init(s_o));
     }
+    
+    // triggered
+    Gate triggered = gate(tip.main.mkInp());
+    tip.flps.define(triggered, tip.main.mkOr(just, tip.main.mkAnd(~save, mkSig(triggered))));
 
-    printf("Found constraint of size %d.\n", constr.size());
+    // comparing saved state and outgoing state
+    Sig eq = sig_True;
+    for (int i = 0; i < s_orig.size(); i++) {
+        Sig a = tip.flps.next(s_orig[i]);
+        Sig b = tip.flps.next(s_copy[i]);
+        eq = tip.main.mkAnd(eq, ~tip.main.mkXor(a,b));
+    }
+    
+    // bad
+    Sig bad = tip.main.mkAnd(eq, tip.flps.next(triggered));
+    tip.newSafeProp(~bad);
+}
+
+void checkLivenessBiere(TipCirc& tip, LiveProp p)
+{
+    embedLivenessBiere(tip,p);
+    // safety verification
+    printf("--- calling safety checker ---\n");
+    relativeInduction(tip);
+}
+
+void bmcLivenessBiere(TipCirc& tip, LiveProp p)
+{
+    embedLivenessBiere(tip,p);
+    // safety verification
+    printf("--- calling BMC ---\n");
+    tip.bmc(0,UINT32_MAX);
 }
 
 //=================================================================================================
@@ -132,8 +128,6 @@ void checkLiveness(TipCirc& tip, LiveProp p, int k)
         just = tip.main.mkAnd(just, conj_);
     }
     
-    findSafetyConstraints(tip,p);
-
     Sig x = sig_True;
     for ( int i = 0; i < k; i++ ) {
         Gate y = gate(tip.main.mkInp());

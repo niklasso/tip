@@ -52,8 +52,10 @@ void embedFairness(TipCirc& tip)
             }
             
             // define the flops
+            //Sig reset = accept;  // old implementation
+            Sig reset = tip.main.mkOr(tip.main.mkInp(),accept);
             for (int j = 0; j < n; j++)
-                tip.flps.define(flops[j], tip.main.mkAnd(~accept, triggers[j]));
+                tip.flps.define(flops[j], tip.main.mkAnd(~reset, triggers[j]));
         }
         else
             accept = fairs[0];

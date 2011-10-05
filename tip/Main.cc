@@ -75,6 +75,14 @@ int main(int argc, char** argv)
         embedFairness(tc);
         checkLiveness(tc,p,depth);
     }
+    else if (strcmp(alg, "biere") == 0){
+        embedFairness(tc);
+        checkLivenessBiere(tc,p);
+    }
+    else if (strcmp(alg, "bierebmc") == 0){
+        embedFairness(tc);
+        bmcLivenessBiere(tc,p);
+    }
 
     tc.printResults();
 

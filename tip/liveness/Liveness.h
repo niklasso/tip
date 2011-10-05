@@ -28,6 +28,8 @@ namespace Tip {
 // Liveness Checking:
 
 void checkLiveness(TipCirc& tip, LiveProp p, int k);
+void checkLivenessBiere(TipCirc& tip, LiveProp p);
+void bmcLivenessBiere(TipCirc& tip, LiveProp p);
 
 //=================================================================================================
 
