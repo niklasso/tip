@@ -38,14 +38,18 @@ void refineCandsStepInSequence  (const TipCirc& tip, vec<Sig>& cands);
 bool refineCandsBaseWithMinimize(const TipCirc& tip, vec<Sig>& cands, bool only_coi = false);
 void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands);
 
-bool solveMinimum               (Solver& s, const vec<Lit>& ps, vec<lbool>& min_model, Lit trigger = lit_Undef);
-
+bool solveMinimum(Solver& s, const vec<Lit>& assumps, const vec<Lit>& ps, vec<lbool>& min_model, Lit trigger = lit_Undef);
+bool solveMinimum(Solver& s, const vec<Lit>& ps, vec<lbool>& min_model, Lit trigger = lit_Undef)
+{
+    vec<Lit> dummy_assumps;
+    return solveMinimum(s, dummy_assumps, ps, min_model, trigger);
+}
 
 //=================================================================================================
 // File Local helpers:
 
 // TODO: this should be moved to some general library of algorithms / techniques.
-bool solveMinimum(Solver& s, const vec<Lit>& ps, vec<lbool>& min_model, Lit trigger)
+bool solveMinimum(Solver& s, const vec<Lit>& assumps, const vec<Lit>& ps, vec<lbool>& min_model, Lit trigger)
 {
     for (int i = 0; i < ps.size(); i++)
         s.setPolarity(var(ps[i]), lbool(!sign(ps[i])));
@@ -53,6 +57,8 @@ bool solveMinimum(Solver& s, const vec<Lit>& ps, vec<lbool>& min_model, Lit trig
     vec<Lit> assume;
     bool     satisfied = false;
 
+    // TODO: simplify use of assume, maybe use litset?
+    assumps.copyTo(assume);
     for (;;){
         if (trigger != lit_Undef)
             assume.push(trigger);
@@ -61,7 +67,7 @@ bool solveMinimum(Solver& s, const vec<Lit>& ps, vec<lbool>& min_model, Lit trig
             satisfied = true;
             s.model.copyTo(min_model);
 
-            assume.clear();
+            assumps.copyTo(assume);
             vec<Lit> blocking_clause;
             for (int i = 0; i < ps.size(); i++)
                 if (s.modelValue(ps[i]) == l_False)
@@ -366,19 +372,48 @@ void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands)
     unroller(umap0);
     unroller(umap1);
 
-    // Pre-clausify candidates in both time step 0 and 1. This is to guarantee that candidates have
-    // a defined value in all models:
-    vec<Lit> bad_cands;
-    for (int i = 0; i < cands.size(); i++){
-        Lit l0       = cl.clausify(umap0[gate(cands[i])] ^ sign(cands[i]));
-        Lit l1       = cl.clausify(umap1[gate(cands[i])] ^ sign(cands[i]));
-        Lit bad_cand = mkLit(s.newVar());
-        s.addClause(bad_cand, ~l0);
-        s.addClause(bad_cand,  l1);
-        bad_cands.push(bad_cand);
-    }
+    // loop:
+    //   add clause (~cands) in umap0
+    //   solve(assuming cands in umap1)
+    //    - if no model, we are done
+    //    - if model, remove all cands that are false from the vector
+    while ( 1 ) {
+        if (tip.verbosity >= 2)
+            printf("[refineCandsStepWithMinimize] #cand=%8d, #vars=%8d, #clauses=%8d, #learnts=%6d, #conf=%6d, #solves=%4d, cpu-time=%6.2f\n",
+                   cands.size(),
+                   s.nVars(), s.nClauses(), s.nLearnts(), (int)s.conflicts, (int)s.solves, cpuTime());
 
-    vec<lbool> min_model;
+        // create set to minimize in umap0 (minimizing here means "~cands")
+        // create assumption "cands" in umap1
+        vec<Lit> assumps;
+        vec<Lit> mins;
+        for (int i = 0; i < cands.size(); i++) {
+            mins.push(cl.clausify(umap0[gate(cands[i])]^sign(cands[i])));
+            assumps.push(cl.clausify(umap1[gate(cands[i])]^sign(cands[i])));
+        }
+        
+        // solve, minimizing true literals in mins
+        vec<lbool> min_model;
+        if (!solveMinimum(s, assumps, mins, min_model))
+            break;
+        
+        // save only the candidates that are true in the model    
+        int i,j;
+        for (i = j = 0; i < cands.size(); i++) {
+            lbool b = min_model[var(mins[i])]^sign(mins[i]);
+            if ( b == l_True )
+                cands[j++] = cands[i]; // saving
+            else
+                assert(b != l_Undef);
+        }
+        cands.shrink(i-j);
+        
+        // stop if nothing changed
+        if ( i == j )
+            break;
+    }
+        
+#if 0
     int i,j;
     do {
         if (tip.verbosity >= 2)
@@ -402,8 +437,10 @@ void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands)
         }
         cands.shrink(i - j);
         bad_cands.shrink(i - j);
-        assert(j < i);
+        // assert(j < i);  // should not be here?
     } while (j < i);
+#endif
+
     printf("[refineCandsStepWithMinimize] %d final proper constraints.\n", cands.size());
     printf("[refineCandsStepWithMinimize] cands = ");
     printSigs(cands);
