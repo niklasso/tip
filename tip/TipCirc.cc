@@ -102,6 +102,32 @@ namespace Tip {
     }
 
 
+    void TipCirc::stats()
+    {
+        printf("circ-stats: #flops=%d, #gates=%d, #inps=%d, #reset-gates=%d, #reset-inps=%d\n", 
+               flps.size(), main.nGates(), main.nInps() - flps.size(),
+               init.nGates(), init.nInps());
+
+        int num_safes = 0;
+        int num_lives = 0;
+        int num_cnstrs = 0;
+
+        for (SafeProp p = 0; p < safe_props.size(); p++)
+            if (safe_props[p].stat == pstat_Unknown)
+                num_safes++;
+
+        for (LiveProp p = 0; p < live_props.size(); p++)
+            if (live_props[p].stat == pstat_Unknown)
+                num_lives++;
+
+        for (unsigned i = 0; i < cnstrs.size(); i++)
+            num_cnstrs += cnstrs[i].size()-1;
+
+        printf("prop-stats: #safes=%d, #lives=%d, #cnstrs=%d, #fairs=%d\n",
+               num_safes, num_lives, num_cnstrs, fairs.size());
+               
+    }
+
     void TipCirc::printResults() const
     {
         int n_proved    = 0;
@@ -236,6 +262,65 @@ namespace Tip {
             printSigs(live_props[p].sigs);
             printf("\n");
         }
+    }
+
+
+    void TipCirc::extractRoots(vec<Sig>& xs)
+    {
+        // All safety properties:
+        for (SafeProp p = 0; p < safe_props.size(); p++)
+            if (safe_props[p].stat == pstat_Unknown)
+            xs.push(safe_props[p].sig);
+            else
+                safe_props[p].sig = sig_Undef;
+        
+        // All liveness properties:
+        for (LiveProp p = 0; p < live_props.size(); p++)
+            if (live_props[p].stat == pstat_Unknown){
+                for (int i = 0; i < live_props[p].sigs.size(); i++)
+                    xs.push(live_props[p].sigs[i]);
+            }else{
+                for (int i = 0; i < live_props[p].sigs.size(); i++)
+                    live_props[p].sigs[i] = sig_Undef;
+            }
+        
+        // All constraints:
+        for (unsigned i = 0; i < cnstrs.size(); i++)
+            for (int j = 0; j < cnstrs[i].size(); j++)
+                xs.push(cnstrs[i][j]);
+        
+        // All fairness constraints:
+        for (int i = 0; i < fairs.size(); i++)
+            xs.push(fairs[i]);
+    }
+    
+
+    void TipCirc::updateRoots (GMap<Sig>& cmap)
+    {
+        // All safety properties:
+        for (SafeProp p = 0; p < safe_props.size(); p++)
+            if (safe_props[p].stat == pstat_Unknown)
+                safe_props[p].sig = cmap[gate(safe_props[p].sig)] ^ sign(safe_props[p].sig);
+
+        // All liveness properties:
+        for (LiveProp p = 0; p < live_props.size(); p++)
+            if (live_props[p].stat == pstat_Unknown)
+                for (int i = 0; i < live_props[p].sigs.size(); i++)
+                    live_props[p].sigs[i] = cmap[gate(live_props[p].sigs[i])] ^ sign(live_props[p].sigs[i]);
+        
+        // All constraints:
+        Equivs ceq;
+        for (unsigned i = 0; i < cnstrs.size(); i++){
+            Sig x = cmap[gate(cnstrs[i][0])] ^ sign(cnstrs[i][0]);
+            for (int j = 1; j < cnstrs[i].size(); j++){
+                Sig y = cmap[gate(cnstrs[i][j])] ^ sign(cnstrs[i][j]);
+                ceq.merge(x,y);
+            }
+        }
+        ceq.moveTo(cnstrs);
+
+        // All fairness constraints:
+        map(cmap, fairs);
     }
 
 };

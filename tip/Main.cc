@@ -22,6 +22,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/TipCirc.h"
 #include "tip/liveness/EmbedFairness.h"
 #include "tip/liveness/Liveness.h"
+#include "tip/reductions/RemoveUnused.h"
+#include "tip/reductions/Substitute.h"
 
 using namespace Minisat;
 using namespace Tip;
@@ -65,7 +67,20 @@ int main(int argc, char** argv)
 
     // Simple algorithm flow for testing:
     tc.readAiger(argv[1]);
-    if (sce > 0) tc.sce(sce == 1, false);
+
+    tc.stats();
+    removeUnusedLogic(tc);
+    tc.stats();
+
+    if (sce > 0){
+        tc.sce(sce == 1, false);
+        tc.stats();
+        substituteConstraints(tc);
+        tc.stats();
+        removeUnusedLogic(tc);
+        tc.stats();
+    }
+
 
     if (strcmp(alg, "bmc") == 0)
         tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);

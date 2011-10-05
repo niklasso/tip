@@ -186,7 +186,7 @@ public:
     void bmc               (uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver = bmc_Basic);
     void sce               (bool use_minimize_alg = true, bool only_coi = false);
     void trip              ();
-
+    void stats             ();
 
     //---------------------------------------------------------------------------------------------
     // Debug:
@@ -212,6 +212,9 @@ public:
     SafeProp newSafeProp (Sig x);
     LiveProp newLiveProp (const vec<Sig>& x);
     Trace    newTrace    ()     ;
+
+    void     extractRoots(vec<Sig>& xs);
+    void     updateRoots (GMap<Sig>& cmap);
 
     // Settings:
     int           verbosity;
