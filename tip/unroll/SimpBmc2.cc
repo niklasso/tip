@@ -553,15 +553,15 @@ void SimpUnroller::initialize()
         
     // Extract initial input-variables from solver:
     unroll_inps.push();
-    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit){
-        Gate     inp = *iit;
-        uint32_t num = tip.init.number(inp);
-        Lit      l   = cl_map[inp];
-        assert(!sign(l));
-        assert(num != UINT32_MAX);
-        unroll_inps.last().growTo(num+1, var_Undef);
-        unroll_inps.last()[num] = var(l);
-    }
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit)
+        if (tip.init.number(*iit) != UINT32_MAX){
+            Gate     inp = *iit;
+            uint32_t num = tip.init.number(inp);
+            Lit      l   = cl_map[inp];
+            assert(!sign(l));
+            unroll_inps.last().growTo(num+1, var_Undef);
+            unroll_inps.last()[num] = var(l);
+        }
 
     // Extract & freeze initial flop-front-variables from solver:
     for (int i = 0; i < tip.flps.size(); i++){
@@ -604,20 +604,20 @@ void SimpUnroller::operator()(GMap<Lit>& lit_map){
 
     // Extract input-variables from solver:
     unroll_inps.push();
-    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
-        Gate     inp = *iit;
-        uint32_t num = tip.main.number(inp);
-        Lit      l   = lit_map[inp];
-
-        // TODO: investigate this assert.
-        // assert(l == lit_Undef || !sign(l));
-        assert(l != lit_Undef);
-
-        assert(!sign(l));
-        assert(num != UINT32_MAX);
-        unroll_inps.last().growTo(num+1, var_Undef);
-        unroll_inps.last()[num] = var(l);
-    }
+    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
+        if (tip.main.number(*iit) != UINT32_MAX){
+            Gate     inp = *iit;
+            uint32_t num = tip.main.number(inp);
+            Lit      l   = lit_map[inp];
+            
+            // TODO: investigate this assert.
+            // assert(l == lit_Undef || !sign(l));
+            assert(l != lit_Undef);
+            
+            assert(!sign(l));
+            unroll_inps.last().growTo(num+1, var_Undef);
+            unroll_inps.last()[num] = var(l);
+        }
 
     // Extract & freeze flop-front-variables from solver:
     for (int i = 0; i < tip.flps.size(); i++){

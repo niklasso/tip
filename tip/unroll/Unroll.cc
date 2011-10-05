@@ -37,13 +37,13 @@ void UnrollCirc::initReset()
     copyCirc(tip.init, unroll_circ, init_map);
 
     unroll_inps.push();
-    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd() ; ++iit){
-        Gate inp = *iit;
-        assert(!sign(init_map[*iit]));
-        assert(tip.init.number(inp) != UINT32_MAX);
-        unroll_inps.last().growTo(tip.init.number(inp)+1, gate_Undef);
-        unroll_inps.last()[tip.init.number(inp)] = gate(init_map[*iit]);
-    }
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd() ; ++iit)
+        if (tip.init.number(*iit) != UINT32_MAX){
+            Gate inp = *iit;
+            assert(!sign(init_map[*iit]));
+            unroll_inps.last().growTo(tip.init.number(inp)+1, gate_Undef);
+            unroll_inps.last()[tip.init.number(inp)] = gate(init_map[*iit]);
+        }
 
     for (int i = 0; i < tip.flps.size(); i++)
         flop_front.push(tip.flps.init(tip.flps[i]));
@@ -70,13 +70,13 @@ void UnrollCirc::operator()(GMap<Sig>& unroll_map){
     copyCirc(tip.main, unroll_circ, unroll_map);
 
     unroll_inps.push();
-    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
-        Gate inp = *iit;
-        assert(!sign(unroll_map[*iit]));
-        assert(tip.main.number(inp) != UINT32_MAX);
-        unroll_inps.last().growTo(tip.main.number(inp)+1, gate_Undef);
-        unroll_inps.last()[tip.main.number(inp)] = gate(unroll_map[*iit]);
-    }
+    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
+        if (tip.main.number(*iit) != UINT32_MAX){
+            Gate inp = *iit;
+            assert(!sign(unroll_map[*iit]));
+            unroll_inps.last().growTo(tip.main.number(inp)+1, gate_Undef);
+            unroll_inps.last()[tip.main.number(inp)] = gate(unroll_map[*iit]);
+        }
 
     for (int i = 0; i < tip.flps.size(); i++){
         Gate flop     = tip.flps[i];

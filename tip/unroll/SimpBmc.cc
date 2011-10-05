@@ -64,15 +64,15 @@ void SimpUnroller::initialize()
 
     // Extract input variables:
     unroll_inps.push();
-    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd() ; ++iit){
-        Gate     inp = *iit;
-        uint32_t num = tip.init.number(inp);
-        Lit      l   = cl.lookup(inp);
-        assert(!sign(l));
-        assert(num != UINT32_MAX);
-        unroll_inps.last().growTo(num+1, var_Undef);
-        unroll_inps.last()[num] = var(l);
-    }
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd() ; ++iit)
+        if (tip.init.number(*iit) != UINT32_MAX){
+            Gate     inp = *iit;
+            uint32_t num = tip.init.number(inp);
+            Lit      l   = cl.lookup(inp);
+            assert(!sign(l));
+            unroll_inps.last().growTo(num+1, var_Undef);
+            unroll_inps.last()[num] = var(l);
+        }
 }
 
 
@@ -103,15 +103,15 @@ void SimpUnroller::operator()(Clausifyer<SimpSolver>& unroll_cl){
 
     // Extract input variables:
     unroll_inps.push();
-    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
-        Gate     inp = *iit;
-        uint32_t num = tip.main.number(inp);
-        Lit      l   = unroll_cl.lookup(inp);
-        assert(!sign(l));
-        assert(num != UINT32_MAX);
-        unroll_inps.last().growTo(num+1, var_Undef);
-        unroll_inps.last()[num] = var(l);
-    }
+    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
+        if (tip.main.number(*iit) != UINT32_MAX){
+            Gate     inp = *iit;
+            uint32_t num = tip.main.number(inp);
+            Lit      l   = unroll_cl.lookup(inp);
+            assert(!sign(l));
+            unroll_inps.last().growTo(num+1, var_Undef);
+            unroll_inps.last()[num] = var(l);
+        }
 }
 
 

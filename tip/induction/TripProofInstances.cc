@@ -209,26 +209,26 @@ namespace Tip {
         void traceResetInputs(const TipCirc& tip, const LitSet& lset, const GMap<Lit>& umapl, vec<vec<lbool> >& frames)
         {
             frames.push();
-            for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit){
-                Gate inp = *iit;
-                Lit  l   = umapl[inp];
-                assert(tip.init.number(inp) != UINT32_MAX); // Inputs must be numbered.
-                frames.last().growTo(tip.init.number(inp)+1, l_Undef);
-                frames.last()[tip.init.number(inp)] = lset.has(var(l)) ^ sign(l);
-            }
+            for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit)
+                if (tip.init.number(*iit) != UINT32_MAX){
+                    Gate inp = *iit;
+                    Lit  l   = umapl[inp];
+                    frames.last().growTo(tip.init.number(inp)+1, l_Undef);
+                    frames.last()[tip.init.number(inp)] = lset.has(var(l)) ^ sign(l);
+                }
         }
 
 
         void traceInputs(const TipCirc& tip, const LitSet& lset, const GMap<Lit>& umapl, vec<vec<lbool> >& frames)
         {
             frames.push();
-            for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
-                Gate inp = *iit;
-                Lit  l   = umapl[inp];
-                assert(tip.main.number(inp) != UINT32_MAX); // Inputs must be numbered.
-                frames.last().growTo(tip.main.number(inp)+1, l_Undef);
-                frames.last()[tip.main.number(inp)] = lset.has(var(l)) ^ sign(l);
-            }
+            for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
+                if (tip.main.number(*iit) != UINT32_MAX){
+                    Gate inp = *iit;
+                    Lit  l   = umapl[inp];
+                    frames.last().growTo(tip.main.number(inp)+1, l_Undef);
+                    frames.last()[tip.main.number(inp)] = lset.has(var(l)) ^ sign(l);
+                }
         }
 
 

@@ -81,12 +81,12 @@ template<class T>
 void extractResetInput(const TipCirc& tip, const GMap<T>& m, vec<vec<T> >& frames, T undef)
 {
     frames.push();
-    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit){
-        Gate inp = *iit;
-        assert(tip.init.number(inp) != UINT32_MAX); // Inputs must be numbered.
-        frames.last().growTo(tip.init.number(inp)+1, undef);
-        frames.last()[tip.init.number(inp)] = m[*iit];
-    }
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit)
+        if (tip.init.number(*iit) != UINT32_MAX){
+            Gate inp = *iit;
+            frames.last().growTo(tip.init.number(inp)+1, undef);
+            frames.last()[tip.init.number(inp)] = m[*iit];
+        }
 }
 
 
@@ -94,12 +94,12 @@ template<class T>
 void extractInput(const TipCirc& tip, const GMap<T>& m, vec<vec<T> >& frames, T undef)
 {
     frames.push();
-    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
-        Gate inp = *iit;
-        assert(tip.main.number(inp) != UINT32_MAX); // Inputs must be numbered.
-        frames.last().growTo(tip.main.number(inp)+1, undef);
-        frames.last()[tip.main.number(inp)] = m[*iit];
-    }
+    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
+        if (tip.main.number(*iit) != UINT32_MAX){
+            Gate inp = *iit;
+            frames.last().growTo(tip.main.number(inp)+1, undef);
+            frames.last()[tip.main.number(inp)] = m[*iit];
+        }
 }
 
 
