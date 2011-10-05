@@ -26,11 +26,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 using namespace Minisat;
 using namespace Tip;
 
-static void SIGINT_exit(int) {
-    printf("\n"); printf("*** INTERRUPTED ***\n");
+static bool use_bad_exit = false;
+static void SIGINT_exit(int)
+{
+    printf("\n"); printf("*** INTERRUPTED***\n");
     // TMP: should call _exit() to avoid stupid malloc deadlocks, but we do this to simplify
     // profiling of long running jobs.
-    exit(1); }
+    if (use_bad_exit){
+        printf("*** WARNING: calling 'exit()' in signal handler. May cause dead-lock!\n");
+        exit(1);
+    }else
+        _exit(1);
+}
+
 
 int main(int argc, char** argv)
 {
@@ -42,12 +50,14 @@ int main(int argc, char** argv)
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
     StringOption alg("MAIN", "alg", "Main model checking algorithm to use.\n", "rip");
+    BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.\n", false);
 
     parseOptions(argc, argv, true);
 
     if (argc < 2 || argc > 3)
         printUsageAndExit(argc, argv);
 
+    use_bad_exit = prof;
     sigTerm(SIGINT_exit);
 
     TipCirc tc;
