@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/induction/TripProofInstances.h"
 
 #define GENERALIZE_THEN_PUSH
+//#define VERIFY_SUBSUMPTION
 
 namespace Tip {
 
@@ -82,7 +83,7 @@ namespace Tip {
 
             // Try to push clauses forwards, particularily push clauses forward into the newly opened last
             // frame. Returns true if an invariant is found and false otherwise.
-            bool             pushClauses  ();
+            void             pushClauses  ();
 
             // Add a proved clause 'c'. Returns true if this causes an invariant to be found, and false
             // otherwise.
@@ -390,7 +391,10 @@ namespace Tip {
             // Assume that there was no empty set before:
             // assert(F_size[c->cycle] > 0 || F_size[c->cycle+1] > 0);
 
-            return F_size[c->cycle] == 0;
+            // Note: The last cycle does not imply any of the properties and thus if this becomes
+            // empty it does NOT mean that the algorithm terminates. Also no further clauses can be
+            // extracted as there are no clauses "to the right" of this cycle.
+            return c->cycle < size()-1 && F_size[c->cycle] == 0;
         }
 
         unsigned Trip::size() const { assert(F.size() == F_size.size()); return F.size(); }
@@ -469,11 +473,8 @@ namespace Tip {
                                 addClause(c);
                                 inv_size++;
                             }
-                    printf("[extractInvariant] extracted invariant of size %d\n", inv_size);
-            
-                    // TODO: can we change this assertion to something less strict?
-                    // Check that the invariant is non-empty:
-                    // assert(inv_size > 0);
+                    if (tip.verbosity >= 3)
+                        printf("[extractInvariant] extracted invariant of size %d\n", inv_size);
 
                     return;
                 }
@@ -645,20 +646,17 @@ namespace Tip {
         }
 
 
-        bool Trip::pushClauses()
+        void Trip::pushClauses()
         {
             Clause c,d;
             assert(F.size() > 0);
 
             clearInactive();
 
-            // Somewhat weird special case that currently needs to be taken care of:
-            for (int i = 0; i < F_size.size()-1; i++)
-                if (F_size[i] == 0)
-                    return true;
-
-            // TMP: check that no subsumptions were missed.
+#ifdef VERIFY_SUBSUMPTION
+            // Check that no subsumptions were missed.
             verifySubsumption();
+#endif
             
             for (int i = 0; i < F.size()-1; i++)
                 for (int j = 0; j < F[i].size(); j++)
@@ -667,14 +665,10 @@ namespace Tip {
                         c.cycle++;
                         if (proveStep(c, d)){
                             // NOTE: the clause F[i][j] will be removed by backward subsumption.
-                            if (addClause(d)){
+                            if (addClause(d))
                                 extractInvariant();
-                                return true;
-                            }
                         }
                     }
-
-            return false;
         }
 
 
@@ -775,16 +769,8 @@ namespace Tip {
             F.push();
             F_size.push(0);
             prop.clearClauses();
-            if (pushClauses()){
-                printStats();
-                // All remaining properties proved:
-                for (SafeProp p = 0; p < tip.safe_props.size(); p++)
-                    if (tip.safe_props[p].stat == pstat_Unknown)
-                        tip.safe_props[p].stat = pstat_Proved;
-                
-                return true;
-            }else
-                return false;
+            pushClauses();
+            return false;
         }
 
 
@@ -802,7 +788,7 @@ namespace Tip {
                 for (int i = 0; i < F.size(); i++){
                     printf("%c%d", i == (int)curr_cycle ? '*' : ' ', F_size[i]);
                 }
-                printf(" (%d)", n_inv);
+                printf(" (%d) = %d", n_inv, n_total);
                 printf(newline || tip.verbosity >= 3 ? "\n" : "\r");
                 fflush(stdout);
             }
