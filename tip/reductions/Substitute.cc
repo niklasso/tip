@@ -33,6 +33,8 @@ void substituteConstraints(TipCirc& tip)
         Gate f      = gate(cmap[*flit]);
         Sig  f_next = cmap[gate(tip.flps.next(*flit))] ^ sign(tip.flps.next(*flit));
         cflps.define(f, f_next, tip.flps.init(*flit));
+        // TODO: this should happen in 'define()' but can't at the moment.
+        copy.number(f) = tip.main.number(f);
     }
     copy .moveTo(tip.main);
     cflps.moveTo(tip.flps);

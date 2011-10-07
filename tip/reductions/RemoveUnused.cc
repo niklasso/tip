@@ -80,6 +80,8 @@ void removeUnusedLogic(TipCirc& tip)
             Sig  f_init = copySig(tip.init, copy.init, tip.flps.init(*flit), imap);
             Sig  f_next = mmap[gate(tip.flps.next(*flit))] ^ sign(tip.flps.next(*flit));
             copy.flps.define(f, f_next, f_init);
+            // TODO: this should happen in 'define()' but can't at the moment.
+            copy.main.number(f) =  tip.main.number(f);
         }
 
     copy.init.moveTo(tip.init);
