@@ -48,7 +48,8 @@ int main(int argc, char** argv)
     setUsageHelp("USAGE: %s [options] <input-file> <result-output-file>\n\n  where input is in plain or gzipped binary AIGER.\n");
     IntOption bver ("MAIN", "bv",   "Version of BMC to be used.", 0, IntRange(0,2));
     IntOption depth("MAIN", "k",    "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
-    IntOption p    ("MAIN", "p",    "Which property to work on.", INT32_MAX, IntRange(0,INT32_MAX));
+    IntOption p    ("MAIN", "p",    "Which property to work on.", 0, IntRange(0,INT32_MAX));
+    IntOption kind ("MAIN", "kind", "What kind of algorithm to run.", 0, IntRange(0,INT32_MAX));
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
     StringOption alg("MAIN", "alg", "Main model checking algorithm to use.\n", "rip");
@@ -92,11 +93,11 @@ int main(int argc, char** argv)
     }
     else if (strcmp(alg, "biere") == 0){
         embedFairness(tc);
-        checkLivenessBiere(tc,p);
+        checkLivenessBiere(tc,p,kind);
     }
     else if (strcmp(alg, "bierebmc") == 0){
         embedFairness(tc);
-        bmcLivenessBiere(tc,p);
+        bmcLivenessBiere(tc,p,kind);
     }
 
     tc.printResults();
