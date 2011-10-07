@@ -22,6 +22,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mcl/Clausify.h"
 #include "tip/liveness/Liveness.h"
 #include "tip/induction/Induction.h"
+#include "tip/reductions/RemoveUnused.h"
 #include "tip/unroll/Bmc.h"
 
 namespace Tip {
@@ -36,8 +37,22 @@ void embedLivenessBiere(TipCirc& tip, LiveProp p)
 {
     printf("=== Biere-trick  for property %d ===\n", p);
 
+    if (p >= tip.live_props.size()){
+        printf("ERROR! Liveness property %d does not exist!\n", p);
+        return; }
+
+    // Remove unused logic:
+    if (p > 0){
+        tip.live_props[0].stat = tip.live_props[p].stat;
+        tip.live_props[0].cex  = tip.live_props[p].cex;
+        tip.live_props[p].sigs.moveTo(tip.live_props[0].sigs); }
+    tip.live_props.shrink(tip.live_props.size()-1);
+    removeUnusedLogic(tip);
+    tip.stats();
+
     // preparing "just" signal for constraints
-    Sig just = tip.live_props[p].sigs[0];
+    assert(tip.live_props[0].sigs.size() == 1);
+    Sig just = tip.live_props[0].sigs[0];
     if ( tip.cnstrs.size() > 0 ) {
         printf("Preparing for %d constraints.\n", tip.cnstrs.size());
         Sig conj = sig_True;
@@ -109,9 +124,23 @@ void bmcLivenessBiere(TipCirc& tip, LiveProp p)
 void checkLiveness(TipCirc& tip, LiveProp p, int k)
 {
     printf("=== Liveness checking of property #%d with k=%d ===\n", p, k);
+
+    if (p >= tip.live_props.size()){
+        printf("ERROR! Liveness property %d does not exist!\n", p);
+        return; }
+
+    // Remove unused logic:
+    if (p > 0){
+        tip.live_props[0].stat = tip.live_props[p].stat;
+        tip.live_props[0].cex  = tip.live_props[p].cex;
+        tip.live_props[p].sigs.moveTo(tip.live_props[0].sigs); }
+    tip.live_props.shrink(tip.live_props.size()-1);
+    removeUnusedLogic(tip);
+    tip.stats();
         
     // preparing "just" signal
-    Sig just = tip.live_props[p].sigs[0];
+    assert(tip.live_props[0].sigs.size() == 1);
+    Sig just = tip.live_props[0].sigs[0];
     if ( tip.cnstrs.size() > 0 ) {
         printf("Preparing for %d constraints.\n", tip.cnstrs.size());
         Sig conj = sig_True;
