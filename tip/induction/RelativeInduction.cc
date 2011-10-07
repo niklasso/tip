@@ -585,6 +585,19 @@ namespace Tip {
                 s.addClause(cs);
             }
 
+            // Assert constraints in both cycles 0 and 1:
+            for (int k = 0; k < 2; k++){
+                Clausifyer<Solver>& cl = k == 0 ? cl0 : cl1;
+                for (unsigned i = 0; i < tip.cnstrs.size(); i++){
+                    Lit x = cl.clausify(tip.cnstrs[i][0]);
+                    for (int j = 1; j < tip.cnstrs[i].size(); j++){
+                        Lit y = cl.clausify(tip.cnstrs[i][j]);
+                        s.addClause(~x, y);
+                        s.addClause(~y, x);
+                    }
+                }
+            }
+
             // Verify that clauses are invariant:
             int num_failed = 0;
             for (int i = 0; i < F_inv.size(); i++){

@@ -47,6 +47,18 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
     for (uint32_t i = 0; i < stop_cycle; i++){
         unroll(umap);
 
+        // Assert all constraints:
+        for (unsigned j = 0; j < tip.cnstrs.size(); j++){
+            Sig cx = tip.cnstrs[j][0];
+            Lit lx = cl.clausify(umap[gate(cx)] ^ sign(cx));
+            for (int k = 1; k < tip.cnstrs[j].size(); k++){
+                Sig cy = tip.cnstrs[j][k];
+                Lit ly = cl.clausify(umap[gate(cy)] ^ sign(cy));
+                s.addClause(~lx, ly);
+                s.addClause(~ly, lx);
+            }
+        }
+
         if (i < begin_cycle)
             continue;
 

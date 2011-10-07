@@ -132,6 +132,8 @@ namespace Tip {
         SimpSolver*    solver;
         GMap<Lit>      umapl[2];
         vec<Lit>       inputs;
+        vec<Lit>       outputs;
+        Lit            act_cnstrs;
         LitSet         lset;
         
         void reset();
@@ -157,7 +159,9 @@ namespace Tip {
         SimpSolver*         solver;
         GMap<Lit>           umapl[2];
         vec<Lit>            inputs;
-        Lit                 trigg;
+        vec<Lit>            outputs;
+        Lit                 act_cycle;
+        Lit                 act_cnstrs;
         LitSet              lset;
         
         void reset();
@@ -187,6 +191,7 @@ namespace Tip {
         vec<Lit>       outputs;
         vec<Lit>       activate;
         vec<unsigned>  cycle_clauses;
+        Lit            act_cnstrs;
         LitSet         lset;
         
         void reset();

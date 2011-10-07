@@ -22,6 +22,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/induction/TripProofInstances.h"
 
 //#define EXPENSIVE_CNF_PREPROCESS
+//#define VERBOSE_DEBUG
 
 namespace Tip {
 
@@ -93,6 +94,26 @@ namespace Tip {
                     solver.freezeVar(var(lit));
                     xs.push(lit);
                 }
+        }
+
+
+        void extractConstraints(const TipCirc& tip, const GMap<Sig>& umap, Lit activate,
+                                Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl, vec<Lit>& xs)
+        {
+            for (unsigned i = 0; i < tip.cnstrs.size(); i++){
+                Sig x = tip.cnstrs[i][0];
+                Lit p = cl.clausify(umap[gate(x)] ^ sign(x));
+                solver.freezeVar(var(p));
+                xs.push(p);
+                for (int j = 1; j < tip.cnstrs[i].size(); j++){
+                    Sig y = tip.cnstrs[i][j];
+                    Lit q = cl.clausify(umap[gate(y)] ^ sign(y));
+                    solver.freezeVar(var(q));
+                    solver.addClause(~activate, ~p, q);
+                    solver.addClause(~activate, ~q, p);
+                    xs.push(q);
+                }
+            }
         }
 
 
@@ -256,6 +277,9 @@ namespace Tip {
         umapl[1].clear();
         umapl[1].growTo(tip.main.lastGate(), lit_Undef);
         inputs.clear();
+        outputs.clear();
+        act_cnstrs = mkLit(solver->newVar());
+        solver->freezeVar(var(act_cnstrs));
 
         // Unroll proper number of steps:
         Circ                   uc;                       // Unrolled circuit.
@@ -268,6 +292,10 @@ namespace Tip {
         extractResetInputs(tip, umap[0], cl, *solver, umapl[0], inputs);
         extractInputs     (tip, umap[1], cl, *solver, umapl[1], inputs);
         extractFlopOuts   (tip, umap[1], cl, *solver, umapl[1], inputs);
+        if (tip.cnstrs.size() > 0)
+            extractConstraints(tip, umap[1], act_cnstrs, cl, *solver, umapl[1], outputs);
+        else
+            solver->addClause(act_cnstrs);
 
         // Simplify CNF:
 #ifdef EXPENSIVE_CNF_PREPROCESS
@@ -324,6 +352,10 @@ namespace Tip {
         assert(next == NULL || &c_ == (Clause*)&*next);
         assert(subsumes(bot, c_));
 
+        // printf("[InitInstance::prove] proving c_ = ");
+        // printClause(tip, c_);
+        // printf("\n");
+
         Clause c = c_;
         reduceClause(c);
 
@@ -340,11 +372,39 @@ namespace Tip {
         if (next == NULL)
             solver->extend_model = false;
         bool result;
-        if (solver->solve(assumes)){
+
+        assumes.push(act_cnstrs);
+        bool sat = solver->solve(assumes);
+        assumes.pop();
+
+        if (sat){
             // Found a counter-example:
             if (next != NULL){
                 lset.fromModel(inputs, *solver);
-                shrinkModelOnce(*solver, lset, assumes);
+                vec<Lit> shrink_roots;
+                assumes.copyTo(shrink_roots);
+                append(outputs, shrink_roots);
+                shrinkModelOnce(*solver, lset, shrink_roots);
+
+#ifdef VERBOSE_DEBUG
+                // TMP-debug:
+                for (unsigned i = 0; i < tip.cnstrs.size(); i++){
+                    Sig ox = tip.cnstrs[i][0];
+                    Lit mx = umapl[1][gate(ox)] ^ sign(ox);
+                    assert(solver->modelValue(mx) != l_Undef);
+                    for (int j = 1; j < tip.cnstrs[i].size(); j++){
+                        Sig oy = tip.cnstrs[i][j];
+                        Lit my = umapl[1][gate(oy)] ^ sign(oy);
+                        assert(solver->modelValue(my) != l_Undef);
+                        assert(solver->modelValue(my) == solver->modelValue(my));
+                        printf("[InitInstance::prove] constraint ");
+                        printSig(oy);
+                        printf(" == ");
+                        printSig(ox);
+                        printf(" holds.\n");
+                    }
+                }
+#endif
 
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
@@ -444,8 +504,8 @@ namespace Tip {
 
     void PropInstance::clearClauses()
     {
-        solver->releaseVar(~trigg);
-        trigg = mkLit(solver->newVar());
+        solver->releaseVar(~act_cycle);
+        act_cycle = mkLit(solver->newVar());
     }
 
     void PropInstance::addClause(const Clause& c)
@@ -454,7 +514,7 @@ namespace Tip {
         if (c.cycle == (unsigned)F.size()-1 || c.cycle == cycle_Undef){
             vec<Lit> xs;
             if (c.cycle != cycle_Undef)
-                xs.push(~trigg);
+                xs.push(~act_cycle);
             for (unsigned i = 0; i < c.size(); i++)
                 xs.push(umapl[0][gate(c[i])] ^ sign(c[i]));
             solver->addClause(xs);
@@ -472,13 +532,18 @@ namespace Tip {
         umapl[1].clear();
         umapl[1].growTo(tip.main.lastGate(), lit_Undef);
         inputs.clear();
+        outputs.clear();
+        act_cycle  = mkLit(solver->newVar());
+        act_cnstrs = mkLit(solver->newVar());
+        solver->freezeVar(var(act_cycle));
+        solver->freezeVar(var(act_cnstrs));
 
         // Unroll proper number of steps:
         Circ                   uc;              // Unrolled circuit.
         GMap<Sig>              umap[2];         // Map for circuit unrollings.
         UnrollCirc2            unroll(tip, uc); // Unroller-helper object.
         Clausifyer<SimpSolver> cl(uc, *solver);
-        vec<Lit>               outputs;         // Unused;
+        vec<Lit>               dummy;           // Unused;
         unroll(umap[0]);
         unroll(umap[1]);
 
@@ -486,7 +551,12 @@ namespace Tip {
         extractFlopIns    (tip, umap[0], cl, *solver, umapl[0], inputs);
         extractInputs     (tip, umap[0], cl, *solver, umapl[0], inputs);
         extractInputs     (tip, umap[1], cl, *solver, umapl[1], inputs);
-        extractProps      (tip, umap[1], cl, *solver, umapl[1], outputs);
+        extractProps      (tip, umap[1], cl, *solver, umapl[1], dummy);
+        if (tip.cnstrs.size() > 0){
+            extractConstraints(tip, umap[0], act_cnstrs, cl, *solver, umapl[0], outputs);
+            extractConstraints(tip, umap[1], act_cnstrs, cl, *solver, umapl[1], outputs);
+        }else
+            solver->addClause(act_cnstrs);
 
         // Simplify CNF:
 #ifdef EXPENSIVE_CNF_PREPROCESS
@@ -495,20 +565,23 @@ namespace Tip {
 #endif
         solver->eliminate(true);
         solver->thaw();
-        trigg = mkLit(solver->newVar());
     }
 
 
     lbool PropInstance::prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle)
     {
         Lit l = umapl[1][gate(p)] ^ sign(p);
-        if (solver->solve(~l, trigg)){
+        vec<Lit> assumps;
+        
+        //if (solver->solve(~l, act_cycle)){
+        if (solver->solve(~l, act_cycle, act_cnstrs)){
             assert(solver->modelValue(l) == l_False);
             // Found predecessor state to a bad state:
-            vec<Lit> outputs;
-            outputs.push(~l);
             lset.fromModel(inputs, *solver);
-            shrinkModelOnce(*solver, lset, outputs);
+            vec<Lit> shrink_roots;
+            outputs.copyTo(shrink_roots);
+            shrink_roots.push(~l);
+            shrinkModelOnce(*solver, lset, shrink_roots);
 
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
@@ -520,6 +593,27 @@ namespace Tip {
             // here. The SAT-based query used here is stronger than
             // 3-valued simulation and can thus not be verified with
             // that.
+
+#ifdef VERBOSE_DEBUG
+            // TMP-debug:
+            for (int k = 0; k < 2; k++)
+                for (unsigned i = 0; i < tip.cnstrs.size(); i++){
+                    Sig ox = tip.cnstrs[i][0];
+                    Lit mx = umapl[k][gate(ox)] ^ sign(ox);
+                    assert(solver->modelValue(mx) != l_Undef);
+                    for (int j = 1; j < tip.cnstrs[i].size(); j++){
+                        Sig oy = tip.cnstrs[i][j];
+                        Lit my = umapl[k][gate(oy)] ^ sign(oy);
+                        assert(solver->modelValue(my) != l_Undef);
+                        assert(solver->modelValue(my) == solver->modelValue(my));
+                        printf("[PropInstance::prove] cycle=%d constraint ", k);
+                        printSig(oy);
+                        printf(" == ");
+                        printSig(ox);
+                        printf(" holds.\n");
+                    }
+                }
+#endif
 
             // assert(evaluate(shrunk_model, p) == l_False);
 
@@ -533,7 +627,7 @@ namespace Tip {
             no = pred;
 
             return l_False;
-        }else if (!solver->solve(~l))
+        }else if (!solver->solve(~l, act_cnstrs))
             // Property is implied already by invariants:
             return l_True;
         else
@@ -541,7 +635,7 @@ namespace Tip {
     }
 
     PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
-        : tip(t), F(F_), solver(NULL)
+        : tip(t), F(F_), solver(NULL), act_cnstrs(lit_Undef)
     {
         reset();
     }
@@ -588,7 +682,7 @@ namespace Tip {
             solver->releaseVar(~activate[cycle]);
             cycle_clauses[cycle] = 0;
 
-            // Introduce new trigger literal:
+            // Introduce new activation literal:
             activate[cycle] = mkLit(solver->newVar());
 
             // Re-add all clauses from this cycle:
@@ -612,9 +706,12 @@ namespace Tip {
         inputs.clear();
         outputs.clear();
         activate.clear();
+        act_cnstrs = mkLit(solver->newVar());
+        solver->freezeVar(var(act_cnstrs));
 
         // Unroll proper number of steps:
         Clausifyer<SimpSolver> cl(tip.main, *solver);
+        vec<Lit>               dummy;
 
         // FIXME: ugly, but will do for now.
         GMap<Sig> id(tip.main.lastGate(), sig_Undef);
@@ -624,7 +721,11 @@ namespace Tip {
         // Extract all needed references:
         extractFlopIns (tip, id, cl, *solver, umapl, inputs);
         extractInputs  (tip, id, cl, *solver, umapl, inputs);
-        extractFlopOuts(tip, id, cl, *solver, umapl, outputs);
+        extractFlopOuts(tip, id, cl, *solver, umapl, dummy);
+        if (tip.cnstrs.size() > 0)
+            extractConstraints(tip, id, act_cnstrs, cl, *solver, umapl, outputs);
+        else
+            solver->addClause(act_cnstrs);
 
         // Simplify CNF:
 #ifdef EXPENSIVE_CNF_PREPROCESS
@@ -640,9 +741,10 @@ namespace Tip {
     {
         assert(next == NULL || &c == (Clause*)&*next);
         assert(c.cycle > 0);
-        vec<Lit> outputs;
+        vec<Lit> shrink_root;
         vec<Lit> inputs;
         vec<Lit> assumes;
+        outputs.copyTo(shrink_root);
         this->inputs.copyTo(inputs);
 
         // Assume proved clauses:
@@ -658,9 +760,11 @@ namespace Tip {
             Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
             Lit l = umapl[gate(x)] ^ sign(x);
             assert(l != lit_Undef);
-            outputs.push(~l);
+            shrink_root.push(~l);
             assumes.push(~l);
         }
+        // Assume constraints:
+        assumes.push(act_cnstrs);
 
         // Try to satisfy clause 'c' (incoming):
         vec<Lit> cls;
@@ -705,12 +809,32 @@ namespace Tip {
             // Found a counter-example:
             if (next != NULL){
                 lset.fromModel(inputs, *solver);
-                shrinkModelOnce(*solver, lset, outputs);
+                shrinkModelOnce(*solver, lset, shrink_root);
 
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
                 traceInputs     (tip, lset, umapl, frames);
                 getClause       (tip, lset, umapl, clause);
+
+#ifdef VERBOSE_DEBUG
+                // TMP-debug:
+                for (unsigned i = 0; i < tip.cnstrs.size(); i++){
+                    Sig ox = tip.cnstrs[i][0];
+                    Lit mx = umapl[gate(ox)] ^ sign(ox);
+                    assert(solver->modelValue(mx) != l_Undef);
+                    for (int j = 1; j < tip.cnstrs[i].size(); j++){
+                        Sig oy = tip.cnstrs[i][j];
+                        Lit my = umapl[gate(oy)] ^ sign(oy);
+                        assert(solver->modelValue(my) != l_Undef);
+                        assert(solver->modelValue(my) == solver->modelValue(my));
+                        printf("[StepInstance::prove] constraint ");
+                        printSig(oy);
+                        printf(" == ");
+                        printSig(ox);
+                        printf(" holds.\n");
+                    }
+                }
+#endif
 
                 SharedRef<ScheduledClause> pred(new ScheduledClause(clause, c.cycle-1, frames[0], next));
                 //printf("[StepInstance::prove] pred = %p\n", pred);
