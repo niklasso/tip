@@ -285,13 +285,14 @@ namespace Tip {
         Circ                   uc;                       // Unrolled circuit.
         GMap<Sig>              umap[2];                  // Map for circuit unrollings.
         UnrollCirc2            unroll(tip, uc, umap[0]); // Unroller-helper object.
+        vec<Lit>               dummy;                    // Unused.
         Clausifyer<SimpSolver> cl(uc, *solver);
         unroll(umap[1]);
 
         // Extract all needed references:
         extractResetInputs(tip, umap[0], cl, *solver, umapl[0], inputs);
         extractInputs     (tip, umap[1], cl, *solver, umapl[1], inputs);
-        extractFlopOuts   (tip, umap[1], cl, *solver, umapl[1], inputs);
+        extractFlopOuts   (tip, umap[1], cl, *solver, umapl[1], dummy);
         if (tip.cnstrs.size() > 0)
             extractConstraints(tip, umap[1], act_cnstrs, cl, *solver, umapl[1], outputs);
         else
