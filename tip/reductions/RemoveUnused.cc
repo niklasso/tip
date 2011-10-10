@@ -52,13 +52,13 @@ void removeUnusedLogic(TipCirc& tip)
 
     unsigned max_input = 0;
     for (SeqCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
-        if (tip.main.number(*iit) != UINT32_MAX && tip.main.number(*iit) > max_input)
-            max_input = tip.main.number(*iit);
+        if (tip.main.number(*iit) != UINT32_MAX && tip.main.number(*iit)+1 > max_input)
+            max_input = tip.main.number(*iit)+1;
 
     unsigned max_init_input = 0;
     for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit)
-        if (tip.init.number(*iit) != UINT32_MAX && tip.init.number(*iit) > max_init_input)
-            max_init_input = tip.init.number(*iit);
+        if (tip.init.number(*iit) != UINT32_MAX && tip.init.number(*iit)+1 > max_init_input)
+            max_init_input = tip.init.number(*iit)+1;
 
     //--------------------------------------------------------------------------
     // Collect starting referenses (active properties + constraints + fairness):
@@ -133,20 +133,20 @@ void removeUnusedLogic(TipCirc& tip)
 
     unsigned new_max_input = 0;
     for (SeqCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
-        if (tip.main.number(*iit) != UINT32_MAX && tip.main.number(*iit) > new_max_input)
-            new_max_input = tip.main.number(*iit);
+        if (tip.main.number(*iit) != UINT32_MAX && tip.main.number(*iit)+1 > new_max_input)
+            new_max_input = tip.main.number(*iit)+1;
 
     unsigned new_max_init_input = 0;
     for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit)
-        if (tip.init.number(*iit) != UINT32_MAX && tip.init.number(*iit) > new_max_init_input)
-            new_max_init_input = tip.init.number(*iit);
+        if (tip.init.number(*iit) != UINT32_MAX && tip.init.number(*iit)+1 > new_max_init_input)
+            new_max_init_input = tip.init.number(*iit)+1;
 
     if (new_max_input < max_input || new_max_init_input < max_init_input){
         if (tip.verbosity >= 2)
             printf("[removeUnusedLogic] lost some inputs that need to be corrected: %d -> %d (init), %d -> %d (main)\n",
                    max_init_input, new_max_init_input, max_input, new_max_input);
 
-        tip.tradaptor = new LostInputAdaptor(max_init_input+1, max_input+1, tip.tradaptor);
+        tip.tradaptor = new LostInputAdaptor(max_init_input, max_input, tip.tradaptor);
     }
 }
 

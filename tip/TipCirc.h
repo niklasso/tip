@@ -94,9 +94,11 @@ class AigerInitTraceAdaptor : public TraceAdaptor
         vec<lbool>& prv_zero = frames[0];
 
         for (int i = 0; i < flop_init.size(); i++)
-            if (flop_init[i].val == l_Undef)
+            if (flop_init[i].val == l_Undef){
+                assert(flop_init[i].x_id != UINT32_MAX);
+                assert(flop_init[i].x_id < (uint32_t)prv_zero.size());
                 new_zero.push(prv_zero[flop_init[i].x_id]);
-            else
+            }else
                 new_zero.push(flop_init[i].val);
         new_zero.moveTo(prv_zero);
     }
