@@ -189,6 +189,7 @@ void checkLiveness(TipCirc& tip, LiveProp p, int k)
     // preparing "just" signal
     assert(tip.live_props[0].sigs.size() == 1);
     Sig just = tip.live_props[0].sigs[0];
+#if 0
     if ( tip.cnstrs.size() > 0 ) {
         printf("Preparing for %d constraints.\n", tip.cnstrs.size());
         Sig conj = sig_True;
@@ -204,6 +205,7 @@ void checkLiveness(TipCirc& tip, LiveProp p, int k)
         tip.flps.define(next_conj, conj_, sig_True);
         just = tip.main.mkAnd(just, conj_);
     }
+#endif
     
     Sig x = sig_True;
     for ( int i = 0; i < k; i++ ) {
@@ -213,6 +215,7 @@ void checkLiveness(TipCirc& tip, LiveProp p, int k)
         x = mkSig(y);
         tip.newSafeProp(~x);
     }
+    tip.live_props.clear();
     printf("--- calling safety checker ---\n");
     relativeInduction(tip);
 }
@@ -224,6 +227,27 @@ void checkLiveness(TipCirc& tip)
         checkLiveness(tip, p, 10);
     }
 }
+
+void checkLivenessNative(TipCirc& tip, LiveProp p)
+{
+    printf("=== Native liveness checking of property #%d ===\n", p);
+
+    if (p >= tip.live_props.size()){
+        printf("ERROR! Liveness property %d does not exist!\n", p);
+        return; }
+
+    // Remove unused logic:
+    if (p > 0){
+        tip.live_props[0].stat = tip.live_props[p].stat;
+        tip.live_props[0].cex  = tip.live_props[p].cex;
+        tip.live_props[p].sigs.moveTo(tip.live_props[0].sigs); }
+    tip.live_props.shrink(tip.live_props.size()-1);
+    removeUnusedLogic(tip);
+    tip.stats();
+
+    relativeInduction(tip);
+}
+
 
 };
 

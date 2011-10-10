@@ -90,12 +90,13 @@ int main(int argc, char** argv)
     else if (strcmp(alg, "live") == 0){
         embedFairness(tc);
         checkLiveness(tc,p,depth);
-    }
-    else if (strcmp(alg, "biere") == 0){
+    }else if (strcmp(alg, "liven") == 0){
+        embedFairness(tc);
+        checkLivenessNative(tc,p);
+    }else if (strcmp(alg, "biere") == 0){
         embedFairness(tc);
         checkLivenessBiere(tc,p,kind);
-    }
-    else if (strcmp(alg, "bierebmc") == 0){
+    }else if (strcmp(alg, "bierebmc") == 0){
         embedFairness(tc);
         bmcLivenessBiere(tc,p,kind);
     }

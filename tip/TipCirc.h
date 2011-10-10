@@ -194,6 +194,7 @@ public:
     // Debug:
 
     void printCirc         () const;
+    void printTrace        (FILE* out, const vec<vec<lbool> >& tr) const;
 
     //---------------------------------------------------------------------------------------------
     // Intermediate internal API: (still public)
@@ -225,7 +226,6 @@ public:
 
     // Internal private helpers:
     
-    void printTrace      (FILE* out, const vec<vec<lbool> >& tr) const;
     void printTrace      (FILE* out, Trace t) const;
     void printTraceAiger (FILE* out, Trace tid) const;
     void clear           ();

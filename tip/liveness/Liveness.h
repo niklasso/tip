@@ -30,6 +30,7 @@ namespace Tip {
 void checkLiveness(TipCirc& tip, LiveProp p, int k);
 void checkLivenessBiere(TipCirc& tip, LiveProp p, int kind);
 void bmcLivenessBiere(TipCirc& tip, LiveProp p, int kind);
+void checkLivenessNative(TipCirc& tip, LiveProp p);
 
 //=================================================================================================
 

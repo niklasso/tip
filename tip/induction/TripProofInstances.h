@@ -147,6 +147,8 @@ namespace Tip {
 
         void reduceClause(Clause& c);
 
+        void extendLiveness(Sig evt, Gate f, Gate g, Sig f_next);
+
         void printStats();
     };
 
@@ -175,6 +177,8 @@ namespace Tip {
         ~PropInstance();
         
         lbool prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle);
+
+        void extendLiveness(Sig evt, Gate f, Gate g, Sig f_next);
 
         void printStats();
     };
@@ -207,6 +211,8 @@ namespace Tip {
         
         bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
         bool prove(const Clause& c, Clause& yes);
+
+        void extendLiveness(Sig evt, Gate f, Gate g, Sig f_next);
 
         void printStats();
     };

@@ -83,8 +83,8 @@ namespace Tip {
         }
 
 
-        void extractProps(const TipCirc& tip, const GMap<Sig>& umap,
-                          Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl, vec<Lit>& xs)
+        void extractSafeProps(const TipCirc& tip, const GMap<Sig>& umap,
+                              Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl)
         {
             for (SafeProp p = 0; p < tip.safe_props.size(); p++)
                 if (tip.safe_props[p].stat == pstat_Unknown){
@@ -92,7 +92,20 @@ namespace Tip {
                     Lit lit           = cl.clausify(umap[gate(prop)] ^ sign(prop));
                     umapl[gate(prop)] = lit ^ sign(prop);
                     solver.freezeVar(var(lit));
-                    xs.push(lit);
+                }
+        }
+
+
+        void extractLiveProps(const TipCirc& tip, const GMap<Sig>& umap,
+                              Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl)
+        {
+            for (LiveProp p = 0; p < tip.live_props.size(); p++)
+                if (tip.live_props[p].stat == pstat_Unknown){
+                    assert(tip.live_props[p].sigs.size() == 1);
+                    Sig prop          = tip.live_props[p].sigs[0];
+                    Lit lit           = cl.clausify(umap[gate(prop)] ^ sign(prop));
+                    umapl[gate(prop)] = lit ^ sign(prop);
+                    solver.freezeVar(var(lit));
                 }
         }
 
@@ -293,6 +306,8 @@ namespace Tip {
         extractResetInputs(tip, umap[0], cl, *solver, umapl[0], inputs);
         extractInputs     (tip, umap[1], cl, *solver, umapl[1], inputs);
         extractFlopOuts   (tip, umap[1], cl, *solver, umapl[1], dummy);
+        extractLiveProps  (tip, umap[1], cl, *solver, umapl[1]);
+        umapl[1][gate_True] = cl.clausify(gate_True);
         if (tip.cnstrs.size() > 0)
             extractConstraints(tip, umap[1], act_cnstrs, cl, *solver, umapl[1], outputs);
         else
@@ -479,6 +494,34 @@ namespace Tip {
     }
 
 
+    void InitInstance::extendLiveness(Sig evt, Gate f, Gate g, Sig f_next)
+    {
+        umapl[1].growTo(tip.main.lastGate(), lit_Undef);
+
+        // Previous part of counter must exist:
+        assert(umapl[1][g] != lit_Undef);
+
+        // Event must exist:
+        assert(umapl[1][gate(evt)] != lit_Undef);
+
+        // Constant true must exist:
+        assert(umapl[1][gate_True] != lit_Undef);
+
+        Lit evtl    = umapl[1][gate(evt)] ^ sign(evt);
+        Lit fl      = ~umapl[1][gate_True];
+        Lit gl      = umapl[1][g];
+        Lit f_nextl = mkLit(solver->newVar());
+
+        umapl[1][f]            = fl;
+        umapl[1][gate(f_next)] = f_nextl ^ sign(f_next);
+
+        solver->addClause(~evtl, ~gl,  f_nextl);
+        solver->addClause(~evtl,  gl, ~f_nextl);
+        solver->addClause( evtl, ~fl,  f_nextl);
+        solver->addClause( evtl,  fl, ~f_nextl);
+    }
+
+
     bool InitInstance::prove(const Clause& c, const Clause& bot, Clause& yes)
     {
         SharedRef<ScheduledClause> dummy;
@@ -551,8 +594,12 @@ namespace Tip {
         // Extract all needed references:
         extractFlopIns    (tip, umap[0], cl, *solver, umapl[0], inputs);
         extractInputs     (tip, umap[0], cl, *solver, umapl[0], inputs);
+        extractLiveProps  (tip, umap[0], cl, *solver, umapl[0]);
         extractInputs     (tip, umap[1], cl, *solver, umapl[1], inputs);
-        extractProps      (tip, umap[1], cl, *solver, umapl[1], dummy);
+        extractSafeProps  (tip, umap[1], cl, *solver, umapl[1]);
+        extractLiveProps  (tip, umap[1], cl, *solver, umapl[1]);
+        umapl[0][gate_True] = cl.clausify(gate_True);
+        umapl[1][gate_True] = cl.clausify(gate_True);
         if (tip.cnstrs.size() > 0){
             extractConstraints(tip, umap[0], act_cnstrs, cl, *solver, umapl[0], outputs);
             extractConstraints(tip, umap[1], act_cnstrs, cl, *solver, umapl[1], outputs);
@@ -634,6 +681,52 @@ namespace Tip {
         else
             return l_Undef;
     }
+
+
+    void PropInstance::extendLiveness(Sig evt, Gate f, Gate g, Sig f_next)
+    {
+        umapl[0].growTo(tip.main.lastGate(), lit_Undef);
+        umapl[1].growTo(tip.main.lastGate(), lit_Undef);
+
+        // Previous part of counter must exist:
+        assert(umapl[0][g] != lit_Undef);
+        assert(umapl[1][g] != lit_Undef);
+
+        // Event must exist:
+        assert(umapl[0][gate(evt)] != lit_Undef);
+        assert(umapl[1][gate(evt)] != lit_Undef);
+
+        // Constant true must exist:
+        assert(umapl[0][gate_True] != lit_Undef);
+        assert(umapl[1][gate_True] != lit_Undef);
+
+        Lit evtl0    = umapl[0][gate(evt)] ^ sign(evt);
+        Lit evtl1    = umapl[1][gate(evt)] ^ sign(evt);
+        Lit fl0      = mkLit(solver->newVar());
+        Lit fl1      = mkLit(solver->newVar());
+        Lit gl0      = umapl[0][g];
+        Lit gl1      = umapl[1][g];
+        Lit f_nextl0 = fl1;
+        Lit f_nextl1 = mkLit(solver->newVar());
+
+        umapl[0][f] = fl0;
+        umapl[1][f] = fl1;
+        umapl[0][gate(f_next)] = f_nextl0 ^ sign(f_next);
+        umapl[1][gate(f_next)] = f_nextl1 ^ sign(f_next);
+
+        solver->addClause(~evtl0, ~gl0,  f_nextl0);
+        solver->addClause(~evtl0,  gl0, ~f_nextl0);
+        solver->addClause( evtl0, ~fl0,  f_nextl0);
+        solver->addClause( evtl0,  fl0, ~f_nextl0);
+
+        solver->addClause(~evtl1, ~gl1,  f_nextl1);
+        solver->addClause(~evtl1,  gl1, ~f_nextl1);
+        solver->addClause( evtl1, ~fl1,  f_nextl1);
+        solver->addClause( evtl1,  fl1, ~f_nextl1);
+
+        inputs.push(fl0);
+    }
+
 
     PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
         : tip(t), F(F_), solver(NULL), act_cnstrs(lit_Undef)
@@ -720,9 +813,11 @@ namespace Tip {
             id[*git] = mkSig(*git);
 
         // Extract all needed references:
-        extractFlopIns (tip, id, cl, *solver, umapl, inputs);
-        extractInputs  (tip, id, cl, *solver, umapl, inputs);
-        extractFlopOuts(tip, id, cl, *solver, umapl, dummy);
+        extractFlopIns  (tip, id, cl, *solver, umapl, inputs);
+        extractInputs   (tip, id, cl, *solver, umapl, inputs);
+        extractFlopOuts (tip, id, cl, *solver, umapl, dummy);
+        extractLiveProps(tip, id, cl, *solver, umapl);
+        umapl[gate_True] = cl.clausify(gate_True);
         if (tip.cnstrs.size() > 0)
             extractConstraints(tip, id, act_cnstrs, cl, *solver, umapl, outputs);
         else
@@ -875,6 +970,37 @@ namespace Tip {
 
         return result;
     }
+
+
+    void StepInstance::extendLiveness(Sig evt, Gate f, Gate g, Sig f_next)
+    {
+        umapl.growTo(tip.main.lastGate(), lit_Undef);
+
+        // Previous part of counter must exist:
+        assert(umapl[g] != lit_Undef);
+
+        // Event must exist:
+        assert(umapl[gate(evt)] != lit_Undef);
+
+        // Constant true must exist:
+        assert(umapl[gate_True] != lit_Undef);
+
+        Lit evtl    = umapl[gate(evt)] ^ sign(evt);
+        Lit fl      = mkLit(solver->newVar());
+        Lit gl      = umapl[g];
+        Lit f_nextl = mkLit(solver->newVar());
+
+        umapl[f]            = fl;
+        umapl[gate(f_next)] = f_nextl ^ sign(f_next);
+
+        solver->addClause(~evtl, ~gl,  f_nextl);
+        solver->addClause(~evtl,  gl, ~f_nextl);
+        solver->addClause( evtl, ~fl,  f_nextl);
+        solver->addClause( evtl,  fl, ~f_nextl);
+
+        inputs.push(fl);
+    }
+
 
     bool StepInstance::prove(const Clause& c, Clause& yes)
     {

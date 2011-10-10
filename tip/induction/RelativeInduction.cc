@@ -30,8 +30,15 @@ namespace Tip {
 
     namespace {
 
+        struct EventCounter {
+            unsigned k;
+            Sig      x;
+            EventCounter() : k(0), x(sig_True){}
+        };
+
         //===================================================================================================
         // Temporal Relative Induction Prover:
+
         class Trip {
             TipCirc&             tip;
 
@@ -51,6 +58,9 @@ namespace Tip {
             InitInstance         init;
             PropInstance         prop;
             StepInstance         step;
+
+            // Liveness to safety mapping:
+            vec<EventCounter>    event_cnts;
 
             // PROVE:   Init ^ Trans => c'
             // RETURNS: True and a stronger clause d (subset of c) that holds in cycle 1,
@@ -79,7 +89,7 @@ namespace Tip {
 
             // Prove scheduled clause "recursively". Returns true if the clause was proved, and
             // false if it was falsified.
-            bool             proveRec(SharedRef<ScheduledClause> sc, SafeProp p);
+            bool             proveRec(SharedRef<ScheduledClause> sc, SharedRef<ScheduledClause>& pred);
 
             // Try to push clauses forwards, particularily push clauses forward into the newly opened last
             // frame. Returns true if an invariant is found and false otherwise.
@@ -114,6 +124,9 @@ namespace Tip {
 
             // Extracts the trace that leads to the failure, and removes all scheduled clauses.
             void             extractTrace (SharedRef<ScheduledClause> sc, vec<vec<lbool> >& frames);
+
+
+            void             extendLiveness(LiveProp p);
 
 
 
@@ -281,6 +294,11 @@ namespace Tip {
             for (SafeProp p = 0; p < tip.safe_props.size(); p++)
                 if (tip.safe_props[p].stat == pstat_Unknown)
                     return false;
+
+            for (LiveProp p = 0; p < tip.live_props.size(); p++)
+                if (tip.live_props[p].stat == pstat_Unknown)
+                    return false;
+
             return true;
         }
 
@@ -297,6 +315,26 @@ namespace Tip {
             // Note: should free memory implicitly using reference counting etc.
             clause_queue.clear();
         }
+
+
+        void Trip::extendLiveness(LiveProp p)
+        {
+            assert(tip.live_props[p].sigs.size() == 1);
+
+            Sig evt = tip.live_props[p].sigs[0];
+            Sig flp = tip.main.mkInp();
+            Sig out = tip.main.mkMux(evt, event_cnts[p].x, flp);
+
+            tip.flps.define(gate(flp), out);
+
+            init.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
+            prop.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
+            step.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
+
+            event_cnts[p].x = flp;
+            event_cnts[p].k++;
+        }
+
 
         void Trip::enqueueClause(SharedRef<ScheduledClause> sc)
         {
@@ -624,6 +662,8 @@ namespace Tip {
                     if (s.solve(~cl1.clausify(tip.safe_props[p].sig)))
                         num_failed++;
 
+            // TODO: also check liveness
+
             if (num_failed > 0){
                 printf("WARNING! %d properties are not implied by the candidate invariant.\n", num_failed);
                 exit(212); }
@@ -691,7 +731,7 @@ namespace Tip {
         }
 
 
-        bool Trip::proveRec(SharedRef<ScheduledClause> sc, SafeProp p)
+        bool Trip::proveRec(SharedRef<ScheduledClause> sc, SharedRef<ScheduledClause>& pred)
         {
             enqueueClause(sc);
             for (;;){
@@ -701,19 +741,11 @@ namespace Tip {
                     break;
 
                 if (fwdSubsumed(&(const Clause&)*sc)){
-                    // NOTE: there may still be live references to 'sc'. Need some kind of
-                    // reference counting?
-                    // delete sc;
-
                     // FIXME: 'sc' should be scheduled in the future, +1 from the clause that
                     // subsumed it.
+                    continue; }
 
-                    continue;
-                }
-
-                SharedRef<ScheduledClause> pred;
-                Clause                     minimized;
-
+                Clause minimized;
                 static unsigned iters = 0;
 
                 if (proveAndGeneralize(sc, minimized, pred)){
@@ -726,18 +758,10 @@ namespace Tip {
                     }else if (minimized.cycle != cycle_Undef && minimized.cycle+1 < size()){
                         sc->cycle = minimized.cycle+1;
                         enqueueClause(sc);
-                    }else
-                        ;
-                    // FIXME: reference counting?
-                    // delete sc;
-                }else if (sc->cycle == 0){
-                    Trace             cex    = tip.newTrace();
-                    vec<vec<lbool> >& frames = tip.traces[cex].frames;
-                    extractTrace(pred, frames);
-                    tip.safe_props[p].stat   = pstat_Falsified;
-                    tip.safe_props[p].cex    = cex;
+                    }
+                }else if (sc->cycle == 0)
                     return false;
-                }else{
+                else{
                     enqueueClause(pred);
                     enqueueClause(sc);
                 }
@@ -750,16 +774,24 @@ namespace Tip {
         bool Trip::decideCycle()
         {
             SharedRef<ScheduledClause> pred;
+            SharedRef<ScheduledClause> start;
             int                        unresolved = 0;
+
+            // Process safety properties:
             for (SafeProp p = 0; p < tip.safe_props.size(); p++)
                 if (tip.safe_props[p].stat == pstat_Unknown){
                     lbool prop_res = l_False;
                     do {
                         prop_res = proveProp(tip.safe_props[p].sig, pred);
                         if (prop_res == l_False){
-                            if (!proveRec(pred, p)){
+                            if (!proveRec(pred, start)){
                                 // 'p' was falsified.
-                                printf("[decideCycle] property %d was falsified!\n", p);
+                                printf("[decideCycle] safety property %d was falsified!\n", p);
+                                Trace             cex    = tip.newTrace();
+                                vec<vec<lbool> >& frames = tip.traces[cex].frames;
+                                extractTrace(start, frames);
+                                tip.safe_props[p].stat   = pstat_Falsified;
+                                tip.safe_props[p].cex    = cex;
                                 break;
                             }
                         }else if (prop_res == l_True){
@@ -772,6 +804,40 @@ namespace Tip {
                         }
                     }while (prop_res == l_False);
                 }
+
+            // Process liveness properties:
+            event_cnts.growTo(tip.live_props.size());
+            for (LiveProp p = 0; p < tip.live_props.size(); p++)
+                if (tip.live_props[p].stat == pstat_Unknown){
+                    lbool prop_res = l_False;
+                    do {
+                        // printf("[decideCycle] checking liveness property %d in cycle %d\n", p, size());
+                        prop_res = proveProp(~event_cnts[p].x, pred);
+                        if (prop_res == l_False){
+                            if (!proveRec(pred, start)){
+                                // 'p' was falsified.
+                                printf("[decideCycle] event counter for liveness property %d reached %d\n", p, event_cnts[p].k);
+
+                                // vec<vec<lbool> > frames;
+                                // extractTrace(start, frames);
+                                // tip.printTrace(stdout, frames);
+
+                                // Important:
+                                clause_queue.clear();
+
+                                extendLiveness(p);
+                            }
+                        }else if (prop_res == l_True){
+                            // 'p' is implied by the invariants.
+                            tip.live_props[p].stat = pstat_Proved;
+                            printf("[decideCycle] liveness property %d was proved!\n", p);
+                        }else if (prop_res == l_Undef){
+                            // Done with 'p' for this cycle:
+                            unresolved++;
+                        }
+                    }while (prop_res == l_False);
+                }
+
 
             // Check if all properties were resolved:
             if (unresolved == 0)
@@ -833,6 +899,8 @@ namespace Tip {
                     trip.printInvariant(); }
                 break;
             }
+        // TODO: also check liveness
+
 
         printf("Trip statistics:\n");
         printf("================================================================================\n");
