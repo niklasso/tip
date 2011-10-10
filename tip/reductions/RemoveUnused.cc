@@ -21,9 +21,38 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Tip {
 
+    namespace {
+
+        // Redundant logic removal may remove some inputs, which will change the size of input
+        // frames when inputs with maximal numberings are removed. This trace adaptor inserts the
+        // proper amount of 'x's at the end of each frame to correct the trace.
+        class LostInputAdaptor : public TraceAdaptor
+        {
+            unsigned frame_size;
+            void patch(vec<vec<lbool> >& frames){
+                printf("[LostInputAdaptor] adapting ...\n");
+                for (int i = 0; i < frames.size(); i++)
+                    frames[i].growTo(frame_size, l_Undef);
+            }
+            
+        public:
+            LostInputAdaptor(unsigned frame_size_, TraceAdaptor* chain) : 
+                TraceAdaptor(chain), frame_size(frame_size_){}
+        };
+    };
+
+
 void removeUnusedLogic(TipCirc& tip)
 {
     vec<Sig> xs;
+
+    //--------------------------------------------------------------------------
+    // Figure out the current input frame size:
+
+    unsigned max_input = 0;
+    for (SeqCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
+        if (tip.main.number(*iit) != UINT32_MAX && tip.main.number(*iit) > max_input)
+            max_input = tip.main.number(*iit);
 
     //--------------------------------------------------------------------------
     // Collect starting referenses (active properties + constraints + fairness):
@@ -92,6 +121,20 @@ void removeUnusedLogic(TipCirc& tip)
     // Move references to circuit copy:
 
     tip.updateRoots(mmap);
+
+    //--------------------------------------------------------------------------
+    // Figure out the new input frame size:
+
+    unsigned new_max_input = 0;
+    for (SeqCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
+        if (tip.main.number(*iit) != UINT32_MAX && tip.main.number(*iit) > new_max_input)
+            new_max_input = tip.main.number(*iit);
+
+    if (new_max_input < max_input){
+        printf("[removeUnusedLogic] lost some inputs that need to be corrected: %d -> %d\n",
+               max_input, new_max_input);
+        tip.tradaptor = new LostInputAdaptor(max_input+1, tip.tradaptor);
+    }
 }
 
 
