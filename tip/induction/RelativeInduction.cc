@@ -22,6 +22,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/induction/Induction.h"
 #include "tip/induction/TripTypes.h"
 #include "tip/induction/TripProofInstances.h"
+#include "tip/liveness/EmbedFairness.h"
 
 #define GENERALIZE_THEN_PUSH
 //#define VERIFY_SUBSUMPTION
@@ -883,6 +884,8 @@ namespace Tip {
 
     void relativeInduction(TipCirc& tip)
     {
+        embedFairness(tip);
+
         double time_before = cpuTime();
         Trip   trip(tip);
 

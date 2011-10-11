@@ -53,6 +53,8 @@ void embedLivenessBiere(TipCirc& tip, LiveProp p, int kind)
     // preparing "just" signal for constraints
     assert(tip.live_props[0].sigs.size() == 1);
     Sig just = tip.live_props[0].sigs[0];
+
+#if 0
     if ( tip.cnstrs.size() > 0 ) {
         printf("Preparing for %d constraints.\n", tip.cnstrs.size());
         Sig conj = sig_True;
@@ -67,7 +69,9 @@ void embedLivenessBiere(TipCirc& tip, LiveProp p, int kind)
         Sig conj_ = tip.main.mkAnd(mkSig(next_conj), conj);
         tip.flps.define(next_conj, conj_, sig_True);
         just = tip.main.mkAnd(just, conj_);
+        tip.cnstrs.clear();
     }
+#endif
     
     // implementing Biere circuit
     Sig bad = sig_False;
@@ -147,6 +151,8 @@ void embedLivenessBiere(TipCirc& tip, LiveProp p, int kind)
         return;
     }
     tip.newSafeProp(~bad);
+    tip.live_props.clear();
+    removeUnusedLogic(tip);
 }
 
 void checkLivenessBiere(TipCirc& tip, LiveProp p, int kind)
@@ -204,6 +210,7 @@ void checkLiveness(TipCirc& tip, LiveProp p, int k)
         Sig conj_ = tip.main.mkAnd(mkSig(next_conj), conj);
         tip.flps.define(next_conj, conj_, sig_True);
         just = tip.main.mkAnd(just, conj_);
+        tip.cnstrs.clear();
     }
 #endif
     
