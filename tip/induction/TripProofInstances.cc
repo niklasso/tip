@@ -130,58 +130,6 @@ namespace Tip {
         }
 
 
-        // Minimize the last conflicting assumption set:
-        // TODO: can this be improved?
-        void shrinkConflict(SimpSolver& s)
-        {
-            vec<Lit> ass;
-            vec<Lit> smaller;
-            s.extend_model = false;
-            for (;;){
-                ass.clear();
-                for (int i = 0; i < s.conflict.size(); i++)
-                    ass.push(~s.conflict[i]);
-
-                for (int i = 0; i < ass.size(); i++){
-                    smaller.clear();
-                    for (int j = 0; j < ass.size(); j++)
-                        if (i != j)
-                            smaller.push(ass[j]);
-                    if (!s.solve(smaller))
-                        goto retry;
-                }
-                check(!s.solve(ass));
-                break;
-            retry:;
-            }
-            s.extend_model = true;
-        }
-
-
-        void shrinkConflict(SimpSolver& s, vec<Lit>& keep, vec<Lit>& try_remove)
-        {
-            vec<Lit> ass;
-            vec<Lit> smaller;
-
-            s.extend_model = false;
-            while(try_remove.size() > 0){
-                keep.copyTo(ass);
-                for (int i = 0; i < try_remove.size()-1; i++)
-                    ass.push(try_remove[i]);
-
-                if (s.solve(ass)){
-                    keep.push(try_remove.last());
-                    try_remove.pop();
-                }else{
-                    // TODO: could also remove elements in try_remove that is not (negated) in
-                    // s.conflict.
-                    try_remove.pop();
-                }
-            }
-            s.extend_model = true;
-        }
-
-
         void shrinkConflict(SimpSolver& s, LitSet& keep, vec<Lit>& try_remove)
         {
             vec<Lit> ass;
