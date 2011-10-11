@@ -187,6 +187,14 @@ namespace Tip {
             vec<Lit> ass;
             vec<Lit> smaller;
             s.extend_model = false;
+
+            // Remove elements from 'try_remove' that already exists in 'keep':
+            int i,j;
+            for (i = j = 0; i < try_remove.size(); i++)
+                if (!keep.has(try_remove[i]))
+                    try_remove[j++] = try_remove[i];
+            try_remove.shrink(i - j);
+
             while(try_remove.size() > 0){
                 keep.copyTo(ass);
                 for (int i = 0; i < try_remove.size()-1; i++)
