@@ -20,9 +20,38 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Tip_Bmc_h
 #define Tip_Bmc_h
 
+#include "mcl/Clausify.h"
 #include "tip/TipCirc.h"
+#include "tip/unroll/Unroll.h"
 
 namespace Tip {
+
+//=================================================================================================
+// BMC classes:
+
+class BasicBmc {
+    TipCirc&           tip;
+    double             solve_time;
+    Circ               uc;         // Unrolled circuit.
+    vec<IFrame>        ui;         // Unrolled set of input frames.
+    UnrollCirc         unroll;     // Unroller-helper object.
+    Solver             s;          // SAT-solver and clausifyer for unrolled circuit.
+    Clausifyer<Solver> cl;
+    GMap<Sig>          umap;       // Reusable unroll-map.
+    bool               done_;      // Flag that indicates if there are unresolved safety properties.
+    unsigned           cycle;      // Current cycle the circuit is unrolled to.
+
+public:
+    BasicBmc(TipCirc& t);
+
+    void unrollCycle();
+    void decideCycle();
+    bool done       ();
+    void printStats (bool final = false);
+
+    uint64_t props  ();
+    double   time   ();
+};
 
 //=================================================================================================
 // Different BMC implementations:

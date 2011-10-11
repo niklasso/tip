@@ -493,6 +493,8 @@ namespace Tip {
 
     InitInstance::~InitInstance(){ delete solver; }
 
+    uint64_t InitInstance::props(){ return solver->propagations; }
+
     void InitInstance::printStats()
     {
         printf("[init-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
@@ -692,6 +694,8 @@ namespace Tip {
 
 
     PropInstance::~PropInstance(){ delete solver; }
+
+    uint64_t PropInstance::props(){ return solver->propagations; }
 
     void PropInstance::printStats()
     {
@@ -973,6 +977,7 @@ namespace Tip {
 
     StepInstance::~StepInstance(){ delete solver; }
 
+    uint64_t StepInstance::props(){ return solver->propagations; }
 
     void StepInstance::printStats()
     {

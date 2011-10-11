@@ -149,6 +149,7 @@ namespace Tip {
 
         void extendLiveness(Sig evt, Gate f, Gate g, Sig f_next);
 
+        uint64_t props();
         void printStats();
     };
 
@@ -180,6 +181,7 @@ namespace Tip {
 
         void extendLiveness(Sig evt, Gate f, Gate g, Sig f_next);
 
+        uint64_t props();
         void printStats();
     };
 
@@ -214,6 +216,7 @@ namespace Tip {
 
         void extendLiveness(Sig evt, Gate f, Gate g, Sig f_next);
 
+        uint64_t props();
         void printStats();
     };
     

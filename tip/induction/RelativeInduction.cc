@@ -23,6 +23,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/induction/TripTypes.h"
 #include "tip/induction/TripProofInstances.h"
 #include "tip/liveness/EmbedFairness.h"
+#include "tip/unroll/Bmc.h"
 
 #define GENERALIZE_THEN_PUSH
 //#define VERIFY_SUBSUMPTION
@@ -159,6 +160,9 @@ namespace Tip {
             // Prove that the necessary number of initial cycles are bug free. Returns true if all properties
             // are resolved (i.e. all properties were falsifiable), and false otherwise.
             bool baseCase();
+
+            uint64_t props();
+            double   time ();
 
             void printStats(unsigned curr_cycle = cycle_Undef, bool newline = true);
         };
@@ -838,17 +842,21 @@ namespace Tip {
             return false;
         }
 
+        uint64_t Trip::props()
+        {
+            return init.props() + prop.props() + step.props();
+        }
+
+
+        double   Trip::time()
+        {
+        }
+
 
         void Trip::printStats(unsigned curr_cycle, bool newline)
         {
-            if (tip.verbosity >= 3){
-                printf("[trip-stats] #clauses=%d, depth=%d\n", n_total, size());
-                init.printStats();
-                prop.printStats();
-                step.printStats();
-            }
-
             if (tip.verbosity >= 2 || (newline && tip.verbosity >= 1)){
+                printf("[rip] ");
                 printf("%d:", size());
                 for (int i = 0; i < F.size(); i++){
                     printf("%c%d", i == (int)curr_cycle ? '*' : ' ', F_size[i]);
@@ -857,6 +865,15 @@ namespace Tip {
                 printf(newline || tip.verbosity >= 3 ? "\n" : "\r");
                 fflush(stdout);
             }
+            
+#if 0
+            if (tip.verbosity >= 3){
+                printf("[rip-stats] #clauses=%d, depth=%d\n", n_total, size());
+                init.printStats();
+                prop.printStats();
+                step.printStats();
+            }
+#endif
         }
 
 
@@ -874,9 +891,22 @@ namespace Tip {
         double time_before = cpuTime();
         Trip   trip(tip);
 
-        if (!trip.baseCase())
-            while (!trip.decideCycle())
-                trip.printStats();
+        BasicBmc bmc(tip);
+
+        for (int i = 0; !bmc.done() && i < 2; i++){
+            bmc.unrollCycle();
+            bmc.decideCycle();
+        }
+
+        while (!trip.decideCycle()){
+            trip.printStats();
+
+            while (!bmc.done() && bmc.props() < trip.props() * 0.2){
+                bmc.unrollCycle();
+                bmc.decideCycle();
+                bmc.printStats ();
+            }
+        }
 
         // If some property was proved, print the invariant:
         for (SafeProp p = 0; p < tip.safe_props.size(); p++)

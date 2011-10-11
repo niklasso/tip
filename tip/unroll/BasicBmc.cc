@@ -21,7 +21,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "minisat/utils/System.h"
 #include "mcl/CircPrelude.h"
 #include "mcl/Clausify.h"
-#include "tip/unroll/Unroll.h"
 #include "tip/unroll/Bmc.h"
 
 namespace Tip {
@@ -29,9 +28,105 @@ namespace Tip {
 using namespace Minisat;
 
 //=================================================================================================
+// Implementation of Basic BMC class:
+//
+
+BasicBmc::BasicBmc(TipCirc& t) 
+  : tip(t), 
+    solve_time(0),
+    unroll(tip, ui, uc, true),
+    cl(uc, s),
+    done_(false),
+    cycle(0)
+    {}
+
+void BasicBmc::unrollCycle()
+{
+    unroll(umap);
+
+    // Assert all constraints:
+    for (unsigned j = 0; j < tip.cnstrs.size(); j++){
+        Sig cx = tip.cnstrs[j][0];
+        Lit lx = cl.clausify(umap[gate(cx)] ^ sign(cx));
+        for (int k = 1; k < tip.cnstrs[j].size(); k++){
+            Sig cy = tip.cnstrs[j][k];
+            Lit ly = cl.clausify(umap[gate(cy)] ^ sign(cy));
+            s.addClause(~lx, ly);
+            s.addClause(~ly, lx);
+        }
+    }
+    cycle++;
+}
+
+
+void BasicBmc::decideCycle()
+{
+    // Do SAT-tests:
+    int unresolved_safety = 0;
+    for (SafeProp p = 0; p < tip.safe_props.size(); p++){
+        if (tip.safe_props[p].stat != pstat_Unknown)
+            continue;
+            
+        Sig psig_orig   = tip.safe_props[p].sig;
+        Sig psig_unroll = umap[gate(psig_orig)] ^ sign(psig_orig);
+        assert(psig_unroll != sig_Undef);
+        Lit plit = cl.clausify(psig_unroll);
+
+        double solve_time_before = cpuTime();
+        bool ret = s.solve(~plit);
+        solve_time += cpuTime() - solve_time_before;
+        
+        if (ret){
+            // Property falsified, create and extract trace:
+            Trace             cex    = tip.newTrace();
+            vec<vec<lbool> >& frames = tip.traces[cex].frames;
+            for (int k = 0; k < ui.size(); k++){
+                frames.push();
+                for (int l = 0; l < ui[k].size(); l++)
+                    frames.last().push(cl.modelValue(ui[k][l]));
+            }
+            tip.safe_props[p].stat = pstat_Falsified;
+            tip.safe_props[p].cex  = cex;
+        }else
+            unresolved_safety++;
+    }
+
+    // Terminate if all safety properties resolved:
+    done_ = unresolved_safety == 0;
+}
+
+
+bool BasicBmc::done()
+{
+    return done_;
+}
+
+
+void BasicBmc::printStats(bool final)
+{
+    if (tip.verbosity >= 1){
+        printf("[bmc] k=%3d, vrs=%8.3g, cls=%8.3g, con=%8.3g",
+               cycle-1, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
+        if (tip.verbosity >= 2)
+            printf(", time(solve=%6.1f s)\n",
+                   solve_time);
+        else
+            printf("\n");
+
+        if (final)
+            s.printStats();
+    }
+}
+
+uint64_t BasicBmc::props(){ return s.propagations; }
+double   BasicBmc::time (){ return solve_time; }
+
+
+//=================================================================================================
 // Implementation of Basic BMC:
 //
 
+#if 0
 void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 {
     double             time_before = cpuTime();
@@ -120,5 +215,21 @@ void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
         s.printStats();
     }
 }
+#else
+void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
+{
+    BasicBmc bmc(tip);
+
+    for (uint32_t i = 0; i < begin_cycle; i++)
+        bmc.unrollCycle();
+
+    for (uint32_t i = begin_cycle; !bmc.done() && i < stop_cycle; i++){
+        bmc.unrollCycle();
+        bmc.printStats ();
+        bmc.decideCycle();
+    }
+    bmc.printStats(true);
+}
+#endif
 
 };
