@@ -63,12 +63,6 @@ namespace Tip {
             // Liveness to safety mapping:
             vec<EventCounter>    event_cnts;
 
-            // PROVE:   Init ^ Trans => c'
-            // RETURNS: True and a stronger clause d (subset of c) that holds in cycle 1,
-            //       or False and the starting point of a counter-example trace.
-            bool             proveInit(SharedRef<ScheduledClause> c, Clause& yes, SharedRef<ScheduledClause>& no);
-            bool             proveInit(const Clause& c, Clause& yes);
-
             // PROVE:   let k = c.cycle: F_inv ^ F[k-1] ^ c ^ Trans => c'
             // RETURNS: True and a minimal stronger clause d (subset of c) that holds in a maximal cycle >= k,
             //       or False and a new clause predecessor to be proved in cycle k-1.
@@ -169,35 +163,26 @@ namespace Tip {
             void printStats(unsigned curr_cycle = cycle_Undef, bool newline = true);
         };
 
-        // bool Trip::proveInit(SharedRef<ScheduledClause> c, Clause& yes, SharedRef<ScheduledClause>& no){ 
-        //     return init.prove(*c, *c, yes, no, c);
-        // }
-        // 
-        // bool Trip::proveInit(const Clause& c, Clause& yes){
-        //     return init.prove(c, c, yes);
-        // }
-
-
         void Trip::generalize(Clause& c)
         {
             Clause try_remove = c;
             Clause d          = c;
             Clause e;
 
-            if (tip.verbosity >= 3){
+            if (tip.verbosity >= 4){
                 printf("[generalize] begin d = ");
                 printClause(d);
                 printf("\n"); }
             for (unsigned i = 0; d.size() > 1 && i < try_remove.size(); i++)
                 if (find(d, try_remove[i])){
                     Clause cand = d - try_remove[i];
-                    if (tip.verbosity >= 3){
+                    if (tip.verbosity >= 4){
                         printf("[generalize] cand = ");
                         printClause(cand);
                         printf("\n"); }
                     if (step.prove(cand, e) && init.prove(cand, e, d)){
                         assert(subsumes(d, cand));
-                        if (tip.verbosity >= 3){
+                        if (tip.verbosity >= 4){
                             printf("[generalize] refine d = ");
                             printClause(d);
                             printf("\n"); }
@@ -205,7 +190,7 @@ namespace Tip {
                 }
             assert(subsumes(d, c));
             c = d;
-            if (tip.verbosity >= 3){
+            if (tip.verbosity >= 4){
                 printf("[generalize] done c = ");
                 printClause(c);
                 printf("\n");}
