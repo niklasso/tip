@@ -157,11 +157,9 @@ namespace Tip {
                 fprintf(out, "1\nb%d\n", p);
                 printTraceAiger(out, safe_props[p].cex);
                 fprintf(out, ".\n");
-                break;
             }else if (safe_props[p].stat == pstat_Proved){
                 fprintf(out, "0\nb%d\n", p);
                 fprintf(out, ".\n");
-                break;
             }
     }
 
