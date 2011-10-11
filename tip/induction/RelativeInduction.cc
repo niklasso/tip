@@ -797,7 +797,7 @@ namespace Tip {
                         }else if (prop_res == l_True){
                             // 'p' is implied by the invariants.
                             tip.safe_props[p].stat = pstat_Proved;
-                            printf("[decideCycle] property %d was proved!\n", p);
+                            printf("[decideCycle] safety property %d was proved!\n", p);
                         }else if (prop_res == l_Undef){
                             // Done with 'p' for this cycle:
                             unresolved++;
