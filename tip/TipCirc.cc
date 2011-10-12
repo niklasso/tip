@@ -97,8 +97,8 @@ namespace Tip {
         semanticConstraintExtraction(*this, use_minimize_alg, only_coi);
     }
 
-    void TipCirc::trip(){
-        relativeInduction(*this);
+    void TipCirc::trip(double bmc_depth_fact, double bmc_prop_fact){
+        relativeInduction(*this, bmc_depth_fact, bmc_prop_fact);
     }
 
 

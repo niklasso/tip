@@ -52,9 +52,12 @@ int main(int argc, char** argv)
     IntOption kind ("MAIN", "kind", "What kind of algorithm to run.", 0, IntRange(0,INT32_MAX));
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
-    StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
     BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
     BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
+    StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
+
+    DoubleOption rip_bmc_fact     ("RIP", "rip-bmc", "rip vs bmc depth factor.", 1);
+    DoubleOption rip_bmc_prop_fact("RIP", "rip-bmc-prop", "rip vs bmc propagation factor.", 0.2);
 
     parseOptions(argc, argv, true);
 
@@ -101,7 +104,7 @@ int main(int argc, char** argv)
     if (strcmp(alg, "bmc") == 0)
         tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
     else if (strcmp(alg, "rip") == 0)
-        tc.trip();
+        tc.trip(rip_bmc_fact, rip_bmc_prop_fact);
     else if (strcmp(alg, "live") == 0)
         checkLiveness(tc,p,depth);
     else if (strcmp(alg, "liven") == 0)

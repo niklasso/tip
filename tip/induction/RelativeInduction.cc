@@ -891,7 +891,7 @@ namespace Tip {
     };
 
 
-    void relativeInduction(TipCirc& tip)
+    void relativeInduction(TipCirc& tip, double bmc_depth_fact, double bmc_prop_fact)
     {
         double   time_before = cpuTime();
         Trip     trip(tip);
@@ -906,7 +906,8 @@ namespace Tip {
             trip.printStats();
 
             // TODO: make parameters of these factors.
-            while (!bmc.done() && (bmc.depth() < trip.depth() || bmc.props() < trip.props() * 0.2)){
+            while (!bmc.done() && ((bmc.depth() < trip.depth() * bmc_depth_fact) || 
+                                   (bmc.props() < trip.props() * bmc_prop_fact))){
                 bmc.unrollCycle();
                 bmc.decideCycle();
                 bmc.printStats ();
