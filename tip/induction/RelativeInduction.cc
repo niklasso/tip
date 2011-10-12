@@ -893,11 +893,8 @@ namespace Tip {
 
     void relativeInduction(TipCirc& tip)
     {
-        embedFairness(tip);
-
-        double time_before = cpuTime();
-        Trip   trip(tip);
-
+        double   time_before = cpuTime();
+        Trip     trip(tip);
         BasicBmc bmc(tip);
 
         for (int i = 0; !bmc.done() && i < 2; i++){
@@ -926,7 +923,6 @@ namespace Tip {
                 break;
             }
         // TODO: also check liveness
-
 
         printf("Trip statistics:\n");
         printf("================================================================================\n");

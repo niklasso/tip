@@ -253,8 +253,6 @@ int      BasicBmc::depth(){ return cycle; }
 
 void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
 {
-    embedFairness(tip);
-
     BasicBmc bmc(tip);
 
     for (uint32_t i = 0; i < begin_cycle; i++)

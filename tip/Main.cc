@@ -48,12 +48,13 @@ int main(int argc, char** argv)
     setUsageHelp("USAGE: %s [options] <input-file> <result-output-file>\n\n  where input is in plain or gzipped binary AIGER.\n");
     IntOption bver ("MAIN", "bv",   "Version of BMC to be used.", 0, IntRange(0,2));
     IntOption depth("MAIN", "k",    "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
-    IntOption p    ("MAIN", "p",    "Which property to work on.", 0, IntRange(0,INT32_MAX));
+    IntOption p    ("MAIN", "p",    "Which property to work on.", -1, IntRange(-1,INT32_MAX));
     IntOption kind ("MAIN", "kind", "What kind of algorithm to run.", 0, IntRange(0,INT32_MAX));
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
-    StringOption alg("MAIN", "alg", "Main model checking algorithm to use.\n", "rip");
-    BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.\n", false);
+    StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
+    BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
+    BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
 
     parseOptions(argc, argv, true);
 
@@ -68,10 +69,25 @@ int main(int argc, char** argv)
 
     // Simple algorithm flow for testing:
     tc.readAiger(argv[1]);
+    tc.stats();
 
-    tc.stats();
-    removeUnusedLogic(tc);
-    tc.stats();
+    // TODO: move this to some more general place and make two versions, one for safety and one for
+    // liveness:
+    if (p >= 0){
+        tc.safe_props.clear();
+
+        for (LiveProp q = 0; q < tc.live_props.size(); q++)
+            if (q != p)
+                tc.live_props[q].stat = pstat_Proved;
+    }
+
+    // Embed fairness constraints and merge "justice" signals:
+    embedFairness(tc);
+
+    // Perform "cone-of-influence" reduction:
+    if (coif){
+        removeUnusedLogic(tc);
+        tc.stats(); }
 
     if (sce > 0){
         tc.sce(sce == 1, false);
@@ -82,24 +98,18 @@ int main(int argc, char** argv)
         tc.stats();
     }
 
-
     if (strcmp(alg, "bmc") == 0)
         tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
     else if (strcmp(alg, "rip") == 0)
         tc.trip();
-    else if (strcmp(alg, "live") == 0){
-        embedFairness(tc);
+    else if (strcmp(alg, "live") == 0)
         checkLiveness(tc,p,depth);
-    }else if (strcmp(alg, "liven") == 0){
-        embedFairness(tc);
+    else if (strcmp(alg, "liven") == 0)
         checkLivenessNative(tc,p);
-    }else if (strcmp(alg, "biere") == 0){
-        embedFairness(tc);
+    else if (strcmp(alg, "biere") == 0)
         checkLivenessBiere(tc,p,kind);
-    }else if (strcmp(alg, "bierebmc") == 0){
-        embedFairness(tc);
+    else if (strcmp(alg, "bierebmc") == 0)
         bmcLivenessBiere(tc,p,kind);
-    }
 
     tc.printResults();
 
