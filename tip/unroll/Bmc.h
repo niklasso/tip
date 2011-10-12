@@ -29,6 +29,8 @@ namespace Tip {
 //=================================================================================================
 // BMC classes:
 
+
+
 class BasicBmc {
     TipCirc&           tip;
     double             solve_time;
@@ -38,8 +40,21 @@ class BasicBmc {
     Solver             s;          // SAT-solver and clausifyer for unrolled circuit.
     Clausifyer<Solver> cl;
     GMap<Sig>          umap;       // Reusable unroll-map.
-    bool               done_;      // Flag that indicates if there are unresolved safety properties.
     unsigned           cycle;      // Current cycle the circuit is unrolled to.
+
+    unsigned           unresolved_safety;
+    unsigned           unresolved_liveness;
+
+    struct LiveCycle {
+        Lit      loop_now;     // True iff loop starts in this cycle.
+        Lit      loop_before;  // True iff there was some loop starting in a previous cycle.
+        vec<Lit> live_in_loop; // For each liveness property, true iff it was true some time during a loop.
+    };
+
+    vec<Lit>       looping_state;
+    vec<LiveCycle> live_data;
+
+    void nextLiveness();
 
 public:
     BasicBmc(TipCirc& t);

@@ -37,6 +37,7 @@ public:
 
     UnrollCirc(const TipCirc& t, vec<IFrame>& ui, Circ& uc, bool reset);
     void operator()(GMap<Sig>& unroll_map);
+    Sig  front   (int i) const { return flop_front[i]; }
 };
 
 
