@@ -161,6 +161,17 @@ namespace Tip {
                 fprintf(out, "0\nb%d\n", p);
                 fprintf(out, ".\n");
             }
+
+        for (LiveProp p = 0; p < live_props.size(); p++)
+            if (live_props[p].stat == pstat_Falsified){
+                fprintf(out, "1\nj%d\n", p);
+                printTraceAiger(out, live_props[p].cex);
+                fprintf(out, ".\n");
+            }else if (live_props[p].stat == pstat_Proved){
+                fprintf(out, "0\nj%d\n", p);
+                fprintf(out, ".\n");
+            }
+
     }
 
     void TipCirc::printTrace(FILE* out, const vec<vec<lbool> >& tr) const
