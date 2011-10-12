@@ -127,7 +127,7 @@ namespace Tip {
 
 
             // Returns number of states in unrolling.
-            unsigned         size() const;
+            unsigned         size () const;
 
             // DEBUG:
             void             printClause (const Clause& c);
@@ -163,6 +163,10 @@ namespace Tip {
 
             uint64_t props();
             double   time ();
+
+            // Returns number of cycles proved safe (just for comparison with bmc).
+            int depth() const;
+
 
             void printStats(unsigned curr_cycle = cycle_Undef, bool newline = true);
         };
@@ -425,8 +429,7 @@ namespace Tip {
             return c->cycle < size()-1 && F_size[c->cycle] == 0;
         }
 
-        unsigned Trip::size() const { assert(F.size() == F_size.size()); return F.size(); }
-
+        unsigned Trip::size () const { assert(F.size() == F_size.size()); return F.size(); }
 
         bool Trip::addClause(const Clause& c_)
         {
@@ -806,7 +809,7 @@ namespace Tip {
                         if (prop_res == l_False){
                             if (!proveRec(pred, start)){
                                 // 'p' was falsified.
-                                printf("[decideCycle] event counter for liveness property %d reached %d\n", p, event_cnts[p].k);
+                                // printf("[decideCycle] event counter for liveness property %d reached %d\n", p, event_cnts[p].k);
 
                                 // vec<vec<lbool> > frames;
                                 // extractTrace(start, frames);
@@ -850,7 +853,11 @@ namespace Tip {
 
         double   Trip::time()
         {
+            // TODO:
+            return 0;
         }
+
+        int Trip::depth() const { return size()+1; }
 
 
         void Trip::printStats(unsigned curr_cycle, bool newline)
@@ -901,7 +908,8 @@ namespace Tip {
         while (!trip.decideCycle()){
             trip.printStats();
 
-            while (!bmc.done() && bmc.props() < trip.props() * 0.2){
+            // TODO: make parameters of these factors.
+            while (!bmc.done() && (bmc.depth() < trip.depth() || bmc.props() < trip.props() * 0.2)){
                 bmc.unrollCycle();
                 bmc.decideCycle();
                 bmc.printStats ();

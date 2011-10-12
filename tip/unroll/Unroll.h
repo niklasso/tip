@@ -31,6 +31,11 @@ class UnrollCirc {
     vec<IFrame>&   unroll_inps;
     vec<Sig>       flop_front;
 
+    // Remember the original state of the circuit to allow limited addition to the circuit without
+    // disturbing the unrolling. Ok to add: unnamed inputs, gates, flops, but NOT named inputs or
+    // properties.
+    Gate           last_gate;
+
     void initReset ();
     void initRandom();
 public:
@@ -38,6 +43,7 @@ public:
     UnrollCirc(const TipCirc& t, vec<IFrame>& ui, Circ& uc, bool reset);
     void operator()(GMap<Sig>& unroll_map);
     Sig  front   (int i) const { return flop_front[i]; }
+    int  numFlops()      const { return flop_front.size(); }
 };
 
 

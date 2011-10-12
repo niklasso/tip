@@ -44,7 +44,7 @@ void BasicBmc::nextLiveness()
     const LiveCycle& prev = live_data[live_data.size()-2];
 
     // Loop logic for next cycle:
-    for (int i = 0; i < tip.flps.size(); i++){
+    for (int i = 0; i < unroll.numFlops(); i++){
         Sig x = umap[gate(tip.flps.next(tip.flps[i]))] ^ sign(tip.flps.next(tip.flps[i]));
         Lit l = cl.clausify(x);
         s.addClause(~next.loop_now, ~l,  looping_state[i]);
@@ -93,7 +93,7 @@ BasicBmc::BasicBmc(TipCirc& t)
     if (unresolved_liveness > 0){
 
         // Create looping state variables:
-        for (int i = 0; i < tip.flps.size(); i++)
+        for (int i = 0; i < unroll.numFlops(); i++)
             looping_state.push(mkLit(s.newVar()));
 
         // Initialize live_data for cycle 0:
@@ -107,7 +107,7 @@ BasicBmc::BasicBmc(TipCirc& t)
 
         // Loop logic for cycle 0:
         Lit& loop0 = live_data[0].loop_now;
-        for (int i = 0; i < tip.flps.size(); i++){
+        for (int i = 0; i < unroll.numFlops(); i++){
             Sig x = unroll.front(i);
             Lit l = cl.clausify(x);
             s.addClause(~loop0, ~l,  looping_state[i]);
@@ -244,6 +244,7 @@ void BasicBmc::printStats(bool final)
 
 uint64_t BasicBmc::props(){ return s.propagations; }
 double   BasicBmc::time (){ return solve_time; }
+int      BasicBmc::depth(){ return cycle; }
 
 
 //=================================================================================================

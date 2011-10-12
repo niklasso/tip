@@ -22,7 +22,7 @@ namespace Tip {
 
 
 UnrollCirc::UnrollCirc(const TipCirc& t, vec<IFrame>& ui, Circ& uc, bool reset) 
-    : tip(t), unroll_circ(uc), unroll_inps(ui)
+    : tip(t), unroll_circ(uc), unroll_inps(ui), last_gate(t.main.lastGate())
 { 
     if (reset)
         initReset();
@@ -65,9 +65,9 @@ void UnrollCirc::initRandom()
 void UnrollCirc::operator()(GMap<Sig>& unroll_map){
     unroll_map.clear();
     unroll_map.growTo(tip.main.lastGate(), sig_Undef);
-    for (int i = 0; i < tip.flps.size(); i++)
+    for (int i = 0; i < numFlops(); i++)
         unroll_map[tip.flps[i]] = flop_front[i];
-    copyCirc(tip.main, unroll_circ, unroll_map);
+    copyCirc(tip.main, unroll_circ, unroll_map, last_gate);
 
     unroll_inps.push();
     for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
@@ -78,7 +78,7 @@ void UnrollCirc::operator()(GMap<Sig>& unroll_map){
             unroll_inps.last()[tip.main.number(inp)] = gate(unroll_map[*iit]);
         }
 
-    for (int i = 0; i < tip.flps.size(); i++){
+    for (int i = 0; i < numFlops(); i++){
         Gate flop     = tip.flps[i];
         Sig  next     = tip.flps.next(flop);
         flop_front[i] = unroll_map[gate(next)] ^ sign(next);
