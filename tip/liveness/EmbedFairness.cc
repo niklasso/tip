@@ -25,6 +25,9 @@ void embedFairness(TipCirc& tip)
 {
     printf("Embedding fairness constraints...\n");
     for (LiveProp i = 0; i < tip.live_props.size(); i++) {
+        if (tip.live_props[i].stat != pstat_Unknown)
+            continue;
+
         // gather all fairness constraints for this proof obligation
         vec<Sig> fairs;
         append(tip.fairs,fairs);
