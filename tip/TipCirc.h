@@ -30,7 +30,7 @@ using namespace Minisat;
 //=================================================================================================
 // Basic types:
 
-typedef enum { pstat_Proved = 0, pstat_Falsified = 1, pstat_Unknown = 2 } PropStatus;
+typedef enum { pstat_Proved = 0, pstat_Falsified = 1, pstat_Unknown = 2, pstat_Discarded = 3 } PropStatus;
 
 typedef vec<Gate> IFrame;
 typedef int       Trace;
@@ -185,9 +185,13 @@ public:
     void writeAiger        (const char* file) const;
     void writeResultsAiger (FILE* out) const;
     void printResults      () const;
+
     void bmc               (uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver = bmc_Basic);
     void sce               (bool use_minimize_alg = true, bool only_coi = false);
     void trip              (double bmc_depth_fact, double bmc_prop_fact);
+    void selSafe           (SafeProp p);
+    void selLive           (LiveProp p);
+
     void stats             ();
 
     //---------------------------------------------------------------------------------------------

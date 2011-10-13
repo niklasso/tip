@@ -48,12 +48,14 @@ int main(int argc, char** argv)
     setUsageHelp("USAGE: %s [options] <input-file> <result-output-file>\n\n  where input is in plain or gzipped binary AIGER.\n");
     IntOption bver ("MAIN", "bv",   "Version of BMC to be used.", 0, IntRange(0,2));
     IntOption depth("MAIN", "k",    "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
-    IntOption p    ("MAIN", "p",    "Which property to work on.", -1, IntRange(-1,INT32_MAX));
+    IntOption safe ("MAIN", "safe", "Which safety property to work on.", -1, IntRange(-1,INT32_MAX));
+    IntOption live ("MAIN", "live", "Which liveness property to work on.", -1, IntRange(-1,INT32_MAX));
     IntOption kind ("MAIN", "kind", "What kind of algorithm to run.", 0, IntRange(0,INT32_MAX));
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
     BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
     BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
+
     StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
 
     DoubleOption rip_bmc_fact     ("RIP", "rip-bmc", "rip vs bmc depth factor.", 1);
@@ -74,18 +76,13 @@ int main(int argc, char** argv)
     tc.readAiger(argv[1]);
     tc.stats();
 
-    // TODO: move this to some more general place and make two versions, one for safety and one for
-    // liveness:
-    if (p >= 0){
-        tc.safe_props.clear();
-
-        for (LiveProp q = 0; q < tc.live_props.size(); q++)
-            if (q != p)
-                tc.live_props[q].stat = pstat_Proved;
-    }
-
     // Embed fairness constraints and merge "justice" signals:
     embedFairness(tc);
+    tc.stats();
+
+    // Select one safety or liveness property:
+    if (safe >= 0) tc.selSafe(safe);
+    if (live >= 0) tc.selLive(live);
 
     // Perform "cone-of-influence" reduction:
     if (coif){
@@ -106,13 +103,11 @@ int main(int argc, char** argv)
     else if (strcmp(alg, "rip") == 0)
         tc.trip(rip_bmc_fact, rip_bmc_prop_fact);
     else if (strcmp(alg, "live") == 0)
-        checkLiveness(tc,p,depth);
-    else if (strcmp(alg, "liven") == 0)
-        checkLivenessNative(tc,p);
+        checkLiveness(tc,depth);
     else if (strcmp(alg, "biere") == 0)
-        checkLivenessBiere(tc,p,kind);
+        checkLivenessBiere(tc,kind);
     else if (strcmp(alg, "bierebmc") == 0)
-        bmcLivenessBiere(tc,p,kind);
+        bmcLivenessBiere(tc,kind);
 
     tc.printResults();
 

@@ -33,26 +33,17 @@ using namespace Minisat;
 // Liveness Checking:
 //
 
-void embedLivenessBiere(TipCirc& tip, LiveProp p, int kind)
+void embedLivenessBiere(TipCirc& tip, int kind)
 {
-    printf("=== Biere-trick for property %d, kind=%d ===\n", p, kind);
-
-    if (p >= tip.live_props.size()){
-        printf("ERROR! Liveness property %d does not exist!\n", p);
-        return; }
-
-    // Remove unused logic:
-    if (p > 0){
-        tip.live_props[0].stat = tip.live_props[p].stat;
-        tip.live_props[0].cex  = tip.live_props[p].cex;
-        tip.live_props[p].sigs.moveTo(tip.live_props[0].sigs); }
-    tip.live_props.shrink(tip.live_props.size()-1);
-    removeUnusedLogic(tip);
-    tip.stats();
-
-    // preparing "just" signal for constraints
-    assert(tip.live_props[0].sigs.size() == 1);
-    Sig just = tip.live_props[0].sigs[0];
+    Sig just = sig_Undef;
+    for (LiveProp p = 0; p < tip.live_props.size(); p++)
+        if (tip.live_props[p].stat == pstat_Unknown){
+            if (just != sig_Undef)
+                printf("ERROR! 'checkLiveness()' only works with a single liveness property."), exit(1);
+            printf("=== Biere-trick for property %d, kind=%d ===\n", p, kind);
+            assert(tip.live_props[p].sigs.size() == 1);
+            just = tip.live_props[p].sigs[0];
+        }
 
 #if 0
     if ( tip.cnstrs.size() > 0 ) {
@@ -157,17 +148,19 @@ void embedLivenessBiere(TipCirc& tip, LiveProp p, int kind)
     tip.stats();
 }
 
-void checkLivenessBiere(TipCirc& tip, LiveProp p, int kind)
+
+void checkLivenessBiere(TipCirc& tip, int kind)
 {
-    embedLivenessBiere(tip,p,kind);
+    embedLivenessBiere(tip,kind);
     // safety verification
     printf("--- calling safety checker ---\n");
     relativeInduction(tip);
 }
 
-void bmcLivenessBiere(TipCirc& tip, LiveProp p, int kind)
+
+void bmcLivenessBiere(TipCirc& tip, int kind)
 {
-    embedLivenessBiere(tip,p,kind);
+    embedLivenessBiere(tip,kind);
     // safety verification
     printf("--- calling BMC ---\n");
     tip.bmc(0,UINT32_MAX);
@@ -177,26 +170,18 @@ void bmcLivenessBiere(TipCirc& tip, LiveProp p, int kind)
 // Liveness Checking:
 //
 
-void checkLiveness(TipCirc& tip, LiveProp p, int k)
+void checkLiveness(TipCirc& tip, int k)
 {
-    printf("=== Liveness checking of property #%d with k=%d ===\n", p, k);
+    Sig just = sig_Undef;
+    for (LiveProp p = 0; p < tip.live_props.size(); p++)
+        if (tip.live_props[p].stat == pstat_Unknown){
+            if (just != sig_Undef)
+                printf("ERROR! 'checkLiveness()' only works with a single liveness property."), exit(1);
+            printf("=== Liveness checking of property #%d with k=%d ===\n", p, k);
+            assert(tip.live_props[p].sigs.size() == 1);
+            just = tip.live_props[p].sigs[0];
+        }
 
-    if (p >= tip.live_props.size()){
-        printf("ERROR! Liveness property %d does not exist!\n", p);
-        return; }
-
-    // Remove unused logic:
-    if (p > 0){
-        tip.live_props[0].stat = tip.live_props[p].stat;
-        tip.live_props[0].cex  = tip.live_props[p].cex;
-        tip.live_props[p].sigs.moveTo(tip.live_props[0].sigs); }
-    tip.live_props.shrink(tip.live_props.size()-1);
-    removeUnusedLogic(tip);
-    tip.stats();
-        
-    // preparing "just" signal
-    assert(tip.live_props[0].sigs.size() == 1);
-    Sig just = tip.live_props[0].sigs[0];
 #if 0
     if ( tip.cnstrs.size() > 0 ) {
         printf("Preparing for %d constraints.\n", tip.cnstrs.size());
@@ -226,34 +211,6 @@ void checkLiveness(TipCirc& tip, LiveProp p, int k)
     }
     tip.live_props.clear();
     printf("--- calling safety checker ---\n");
-    relativeInduction(tip);
-}
-
-void checkLiveness(TipCirc& tip)
-{
-    for( LiveProp p = 0; p < tip.live_props.size(); p++ ) {
-        printf("=== liveness property #%d\n", p);
-        checkLiveness(tip, p, 10);
-    }
-}
-
-void checkLivenessNative(TipCirc& tip, LiveProp p)
-{
-    printf("=== Native liveness checking of property #%d ===\n", p);
-
-    if (p >= tip.live_props.size()){
-        printf("ERROR! Liveness property %d does not exist!\n", p);
-        return; }
-
-    // Remove unused logic:
-    if (p > 0){
-        tip.live_props[0].stat = tip.live_props[p].stat;
-        tip.live_props[0].cex  = tip.live_props[p].cex;
-        tip.live_props[p].sigs.moveTo(tip.live_props[0].sigs); }
-    tip.live_props.shrink(tip.live_props.size()-1);
-    removeUnusedLogic(tip);
-    tip.stats();
-
     relativeInduction(tip);
 }
 

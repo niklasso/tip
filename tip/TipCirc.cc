@@ -102,6 +102,29 @@ namespace Tip {
     }
 
 
+    void TipCirc::selSafe(SafeProp p)
+    {
+        if (p >= safe_props.size())
+            printf("ERROR! Safety property %d does not exist.\n", p), exit(1);
+
+        live_props.clear();
+        for (SafeProp q = 0; q < safe_props.size(); q++)
+            if (q != p)
+                safe_props[q].stat = pstat_Discarded;
+    }
+
+    void TipCirc::selLive(LiveProp p)
+    {
+        if (p >= live_props.size())
+            printf("ERROR! Liveness property %d does not exist.\n", p), exit(1);
+
+        safe_props.clear();
+        for (LiveProp q = 0; q < live_props.size(); q++)
+            if (q != p)
+                live_props[q].stat = pstat_Discarded;
+    }
+
+
     void TipCirc::stats()
     {
         printf("circ-stats: #flops=%d, #gates=%d, #inps=%d, #reset-gates=%d, #reset-inps=%d\n", 
