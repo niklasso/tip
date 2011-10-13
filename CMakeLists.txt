@@ -44,6 +44,7 @@ set(TIP_LIB_SOURCES
     tip/liveness/EmbedFairness.cc
     tip/liveness/Liveness.cc
     tip/reductions/RemoveUnused.cc
+    tip/reductions/ExtractSafety.cc
     tip/reductions/Substitute.cc
     tip/TipCirc.cc)
 

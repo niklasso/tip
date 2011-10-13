@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/liveness/Liveness.h"
 #include "tip/reductions/RemoveUnused.h"
 #include "tip/reductions/Substitute.h"
+#include "tip/reductions/ExtractSafety.h"
 
 using namespace Minisat;
 using namespace Tip;
@@ -55,7 +56,7 @@ int main(int argc, char** argv)
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
     BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
     BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
-
+    BoolOption xsafe("MAIN", "xsafe", "Extract extra safety properties.", false);
     StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
 
     DoubleOption rip_bmc_fact     ("RIP", "rip-bmc", "rip vs bmc depth factor.", 1);
@@ -75,6 +76,10 @@ int main(int argc, char** argv)
     // Simple algorithm flow for testing:
     tc.readAiger(argv[1]);
     tc.stats();
+
+    // Extract extra safety properties
+    if (xsafe)
+        extractSafety(tc);
 
     // Embed fairness constraints and merge "justice" signals:
     embedFairness(tc);
