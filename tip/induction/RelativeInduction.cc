@@ -202,8 +202,8 @@ namespace Tip {
                 printf("[generalize] done c = ");
                 printClause(c);
                 printf("\n");}
-            assert(init.prove(c, c, e));
-            assert(step.prove(c, e));
+            // assert(init.prove(c, c, e));
+            // assert(step.prove(c, e));
         }
 
 
