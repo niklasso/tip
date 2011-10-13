@@ -31,12 +31,24 @@ void extractSafety(TipCirc& tip)
     SafeProp p = 0;
     while ( p < tip.safe_props.size() ) {
         Sig s = tip.safe_props[p].sig;
-        if ( !sign(s) && type(s) == gtype_And ) {
-          tip.safe_props[p].sig = tip.main.lchild(s);
-          tip.newSafeProp(tip.main.rchild(s));
-          num++;
+        
+        // check if this signal not already exists
+        int exists = 0;
+        for ( SafeProp q = 0; q < p; q++ )
+            if ( tip.safe_props[q].sig == s ) {
+                exists = 1;
+                break;
+            }
+        
+        if ( exists ) {
+            tip.safe_props[p].sig = tip.safe_props.last().sig;
+            tip.safe_props.pop();
+        } else if ( !sign(s) && type(s) == gtype_And ) {
+            tip.safe_props[p].sig = tip.main.lchild(s);
+            tip.newSafeProp(tip.main.rchild(s));
+            num++;
         } else
-          p++;
+            p++;
     }
 
     printf("-- expanded %d safety signals\n", num);
