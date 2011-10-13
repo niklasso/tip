@@ -325,6 +325,12 @@ namespace Tip {
             prop.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
             step.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
 
+            // Add that the new target can not be falsified up to the current cycle:
+            vec<Sig> cls;
+            cls.push(~flp);
+            Clause f(cls, size()-1);
+            addClause(f);
+
             event_cnts[p].x = flp;
             event_cnts[p].k++;
         }
