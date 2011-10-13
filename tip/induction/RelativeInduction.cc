@@ -905,9 +905,11 @@ namespace Tip {
         while (!trip.decideCycle()){
             trip.printStats();
 
-            // TODO: make parameters of these factors.
+            // TODO: work on better heuristics here.
             while (!bmc.done() && ((bmc.depth() < trip.depth() * bmc_depth_fact) || 
-                                   (bmc.props() < trip.props() * bmc_prop_fact))){
+                                   ((bmc.depth() < trip.depth()*2) && (bmc.props() < trip.props() * bmc_prop_fact))
+                                   )
+                   ){
                 bmc.unrollCycle();
                 bmc.decideCycle();
                 bmc.printStats ();
