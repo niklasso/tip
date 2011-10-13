@@ -36,8 +36,9 @@ void embedFairness(TipCirc& tip)
         printf("Joining %d triggers for liveness property #%d...\n", n, i);
         
         // check if we have more than 1 signal to take care of
+        // (this also works when n==0, in which case accept becomes sig_True)
         Sig accept;
-        if (n > 1) { 
+        if (n != 1) { 
             // (this method creates helper flops for every fairness signal
             // an alternative would be to do this once for all flops)
 
