@@ -153,6 +153,8 @@ void embedLivenessBiere(TipCirc& tip, LiveProp p, int kind)
     tip.newSafeProp(~bad);
     tip.live_props.clear();
     removeUnusedLogic(tip);
+    printf("After Biere trick and removing unused logic...\n");
+    tip.stats();
 }
 
 void checkLivenessBiere(TipCirc& tip, LiveProp p, int kind)
