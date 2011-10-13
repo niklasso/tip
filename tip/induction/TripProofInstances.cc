@@ -463,10 +463,13 @@ namespace Tip {
         // Constant true must exist:
         assert(umapl[1][gate_True] != lit_Undef);
 
+        // Next of f may be equal to f, but then we expect it to be unsigned.
+        assert(f != gate(f_next) || !sign(f_next));
+
         Lit evtl    = umapl[1][gate(evt)] ^ sign(evt);
         Lit fl      = ~umapl[1][gate_True];
         Lit gl      = umapl[1][g];
-        Lit f_nextl = mkLit(solver->newVar());
+        Lit f_nextl = f != gate(f_next) ? mkLit(solver->newVar()) : fl;
 
         umapl[1][f]            = fl;
         umapl[1][gate(f_next)] = f_nextl ^ sign(f_next);
@@ -658,14 +661,17 @@ namespace Tip {
         assert(umapl[0][gate_True] != lit_Undef);
         assert(umapl[1][gate_True] != lit_Undef);
 
+        // Next of f may be equal to f, but then we expect it to be unsigned.
+        assert(f != gate(f_next) || !sign(f_next));
+
         Lit evtl0    = umapl[0][gate(evt)] ^ sign(evt);
         Lit evtl1    = umapl[1][gate(evt)] ^ sign(evt);
         Lit fl0      = mkLit(solver->newVar());
-        Lit fl1      = mkLit(solver->newVar());
+        Lit fl1      = f != gate(f_next) ? mkLit(solver->newVar()) : fl0;
         Lit gl0      = umapl[0][g];
         Lit gl1      = umapl[1][g];
         Lit f_nextl0 = fl1;
-        Lit f_nextl1 = mkLit(solver->newVar());
+        Lit f_nextl1 = f != gate(f_next) ? mkLit(solver->newVar()) : fl0;
 
         umapl[0][f] = fl0;
         umapl[1][f] = fl1;
@@ -945,10 +951,13 @@ namespace Tip {
         // Constant true must exist:
         assert(umapl[gate_True] != lit_Undef);
 
+        // Next of f may be equal to f, but then we expect it to be unsigned.
+        assert(f != gate(f_next) || !sign(f_next));
+
         Lit evtl    = umapl[gate(evt)] ^ sign(evt);
         Lit fl      = mkLit(solver->newVar());
         Lit gl      = umapl[g];
-        Lit f_nextl = mkLit(solver->newVar());
+        Lit f_nextl = f != gate(f_next) ? mkLit(solver->newVar()) : fl;
 
         umapl[f]            = fl;
         umapl[gate(f_next)] = f_nextl ^ sign(f_next);
