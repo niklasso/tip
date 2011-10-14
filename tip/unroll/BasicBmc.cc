@@ -143,6 +143,24 @@ void BasicBmc::unrollCycle()
 void BasicBmc::decideCycle()
 {
     double time_before = cpuTime();
+
+#if 0
+    // TODO: enable this? Should work but will cause problems for instance in invariant
+    // verification.
+
+    // Check if constraints are satisfiable at this point:
+    if (!s.solve()){
+        // All remaining properties are true:
+        for (SafeProp p = 0; p < tip.safe_props.size(); p++)
+            if (tip.safe_props[p].stat == pstat_Unknown)
+                tip.safe_props[p].stat = pstat_Proved;
+
+        for (LiveProp p = 0; p < tip.live_props.size(); p++)
+            if (tip.live_props[p].stat != pstat_Unknown)
+                tip.live_props[p].stat = pstat_Proved;
+    }
+#endif
+
     // Do SAT-tests:
     unresolved_safety = 0;
     for (SafeProp p = 0; p < tip.safe_props.size(); p++){
