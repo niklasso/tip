@@ -154,7 +154,7 @@ void checkLivenessBiere(TipCirc& tip, int kind)
     embedLivenessBiere(tip,kind);
     // safety verification
     printf("--- calling safety checker ---\n");
-    relativeInduction(tip);
+    tip.trip();
 }
 
 
@@ -211,7 +211,7 @@ void checkLiveness(TipCirc& tip, int k)
     }
     tip.live_props.clear();
     printf("--- calling safety checker ---\n");
-    relativeInduction(tip);
+    tip.trip();
 }
 
 

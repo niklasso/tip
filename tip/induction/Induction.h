@@ -23,7 +23,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Tip {
 
-void relativeInduction(TipCirc& tip, double bmc_depth_fact = 1.0, double bmc_prop_fact = 0.2);
+void relativeInduction(TipCirc& tip, RipBmcMode bmc_mode);
 
 //=================================================================================================
 } // namespace Tip

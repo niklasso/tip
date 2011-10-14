@@ -58,9 +58,7 @@ int main(int argc, char** argv)
     BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
     BoolOption xsafe("MAIN", "xsafe", "Extract extra safety properties.", false);
     StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
-
-    DoubleOption rip_bmc_fact     ("RIP", "rip-bmc", "rip vs bmc depth factor.", 1);
-    DoubleOption rip_bmc_prop_fact("RIP", "rip-bmc-prop", "rip vs bmc propagation factor.", 0.2);
+    IntOption rip_bmc("RIP", "rip-bmc", "Bmc-mode to use in Rip-engine (0=none, 1=safe, 2=live).", 1);
 
     parseOptions(argc, argv, true);
 
@@ -106,7 +104,7 @@ int main(int argc, char** argv)
     if (strcmp(alg, "bmc") == 0)
         tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
     else if (strcmp(alg, "rip") == 0)
-        tc.trip(rip_bmc_fact, rip_bmc_prop_fact);
+        tc.trip((RipBmcMode)(int)rip_bmc);
     else if (strcmp(alg, "live") == 0)
         checkLiveness(tc,depth);
     else if (strcmp(alg, "biere") == 0)

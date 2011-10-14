@@ -913,31 +913,48 @@ namespace Tip {
     };
 
 
-    void relativeInduction(TipCirc& tip, double bmc_depth_fact, double bmc_prop_fact)
+    void relativeInduction(TipCirc& tip, RipBmcMode bmc_mode)
     {
-        double   time_before = cpuTime();
-        Trip     trip(tip);
-        BasicBmc bmc(tip);
+        double    time_before = cpuTime();
+        Trip      trip(tip);
+        BasicBmc* bmc = new BasicBmc(tip);
 
-        for (int i = 0; !bmc.done() && i < 2; i++){
-            bmc.unrollCycle();
-            bmc.decideCycle();
-            bmc.printStats ();
+        // Necessary BMC for relative induction to be sound:
+        for (int i = 0; !bmc->done() && i < 2; i++){
+            bmc->unrollCycle();
+            bmc->decideCycle();
+            bmc->printStats ();
         }
+
+        // Take a few cheap extra BMC cycles:
+        if (bmc_mode == ripbmc_Safe)
+            for (int i = 0; !bmc->done() && bmc->depth() < 30 && bmc->props() < 2000000; i++){
+                //printf("[relativeInduction] bmc->props() = %d\n", (int)bmc->props());
+                bmc->unrollCycle();
+                bmc->decideCycle();
+                bmc->printStats ();
+            }
+
+        if (bmc_mode != ripbmc_Live)
+            delete bmc;
 
         while (!trip.decideCycle()){
             trip.printStats();
 
             // TODO: work on better heuristics here.
-            while (!bmc.done() && ((bmc.depth() < trip.depth() * bmc_depth_fact) || 
-                                   ((bmc.depth() < trip.depth()*32) && (bmc.props() < trip.props() * bmc_prop_fact))
-                                   )
-                   ){
-                bmc.unrollCycle();
-                bmc.decideCycle();
-                bmc.printStats ();
-            }
+            if (bmc_mode == ripbmc_Live)
+                while (!bmc->done() && ((bmc->depth() < trip.depth() * 0.5) || 
+                                       ((bmc->depth() < trip.depth()*32) && (bmc->props() < trip.props() * 0.5))
+                                       )
+                       ){
+                    bmc->unrollCycle();
+                    bmc->decideCycle();
+                    bmc->printStats ();
+                }
         }
+
+        if (bmc_mode == ripbmc_Live)
+            delete bmc;
 
         // If some property was proved, print the invariant:
         for (SafeProp p = 0; p < tip.safe_props.size(); p++)
