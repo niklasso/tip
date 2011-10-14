@@ -331,6 +331,13 @@ namespace Tip {
             Clause f(cls, size()-1);
             addClause(f);
 
+            // Add that the new target implies the old target always:
+            cls.clear();
+            cls.push(~flp);
+            cls.push(event_cnts[p].x);
+            f = Clause(cls, cycle_Undef);
+            addClause(f);
+
             event_cnts[p].x = flp;
             event_cnts[p].k++;
         }
