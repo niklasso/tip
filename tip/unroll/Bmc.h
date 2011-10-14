@@ -65,6 +65,7 @@ public:
     void printStats (bool final = false);
 
     uint64_t props  ();
+    uint64_t solves ();
     double   time   ();
     int      depth  ();
 };

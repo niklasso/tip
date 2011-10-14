@@ -497,7 +497,8 @@ namespace Tip {
 
     InitInstance::~InitInstance(){ delete solver; }
 
-    uint64_t InitInstance::props(){ return solver->propagations; }
+    uint64_t InitInstance::props (){ return solver->propagations; }
+    uint64_t InitInstance::solves(){ return solver->solves; }
 
     void InitInstance::printStats()
     {
@@ -704,7 +705,8 @@ namespace Tip {
 
     PropInstance::~PropInstance(){ delete solver; }
 
-    uint64_t PropInstance::props(){ return solver->propagations; }
+    uint64_t PropInstance::props (){ return solver->propagations; }
+    uint64_t PropInstance::solves(){ return solver->solves; }
 
     void PropInstance::printStats()
     {
@@ -989,7 +991,8 @@ namespace Tip {
 
     StepInstance::~StepInstance(){ delete solver; }
 
-    uint64_t StepInstance::props(){ return solver->propagations; }
+    uint64_t StepInstance::props (){ return solver->propagations; }
+    uint64_t StepInstance::solves(){ return solver->solves; }
 
     void StepInstance::printStats()
     {

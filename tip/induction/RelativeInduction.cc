@@ -64,6 +64,8 @@ namespace Tip {
             // Liveness to safety mapping:
             vec<EventCounter>    event_cnts;
 
+            double               cpu_time;
+
             // PROVE:   let k = c.cycle: F_inv ^ F[k-1] ^ c ^ Trans => c'
             // RETURNS: True and a minimal stronger clause d (subset of c) that holds in a maximal cycle >= k,
             //       or False and a new clause predecessor to be proved in cycle k-1.
@@ -137,7 +139,7 @@ namespace Tip {
             void             printInvariant  ();
             void             verifyInvariant ();
 
-            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), init(t), prop(t, F), step(t, F)
+            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), init(t), prop(t, F), step(t, F), cpu_time(0)
             {
                 F.push();
                 F_size.push(0);
@@ -162,6 +164,7 @@ namespace Tip {
             bool baseCase();
 
             uint64_t props();
+            uint64_t solves();
             double   time ();
 
             // Returns number of cycles proved safe (just for comparison with bmc).
@@ -779,6 +782,7 @@ namespace Tip {
 
         bool Trip::decideCycle()
         {
+            double                     time_before = cpuTime();
             SharedRef<ScheduledClause> pred;
             SharedRef<ScheduledClause> start;
             int                        unresolved = 0;
@@ -844,18 +848,22 @@ namespace Tip {
                     }while (prop_res == l_False);
                 }
 
-
+            bool result;
             // Check if all properties were resolved:
             if (unresolved == 0)
-                return true;
+                result = true;
+            else{
+                // At this point we know that all remaining properties are implied in cycle k+1. Expand
+                // a new frame and push clauses forward as much as possible:
+                F.push();
+                F_size.push(0);
+                prop.clearClauses();
+                pushClauses();
+                result = false;
+            }
 
-            // At this point we know that all remaining properties are implied in cycle k+1. Expand
-            // a new frame and push clauses forward as much as possible:
-            F.push();
-            F_size.push(0);
-            prop.clearClauses();
-            pushClauses();
-            return false;
+            cpu_time += cpuTime() - time_before;
+            return result;
         }
 
         uint64_t Trip::props()
@@ -863,11 +871,12 @@ namespace Tip {
             return init.props() + prop.props() + step.props();
         }
 
+        uint64_t Trip::solves(){ return init.solves() + prop.solves() + step.solves(); }
+
 
         double   Trip::time()
         {
-            // TODO:
-            return 0;
+            return cpu_time;
         }
 
         int Trip::depth() const { return size()+1; }
@@ -881,7 +890,7 @@ namespace Tip {
                 for (int i = 0; i < F.size(); i++){
                     printf("%c%d", i == (int)curr_cycle ? '*' : ' ', F_size[i]);
                 }
-                printf(" (%d) = %d", n_inv, n_total);
+                printf(" (%d) = %d, time = %.1f s", n_inv, n_total, cpu_time);
                 printf(newline || tip.verbosity >= 3 ? "\n" : "\r");
                 fflush(stdout);
             }
@@ -913,6 +922,7 @@ namespace Tip {
         for (int i = 0; !bmc.done() && i < 2; i++){
             bmc.unrollCycle();
             bmc.decideCycle();
+            bmc.printStats ();
         }
 
         while (!trip.decideCycle()){
@@ -920,7 +930,7 @@ namespace Tip {
 
             // TODO: work on better heuristics here.
             while (!bmc.done() && ((bmc.depth() < trip.depth() * bmc_depth_fact) || 
-                                   ((bmc.depth() < trip.depth()*2) && (bmc.props() < trip.props() * bmc_prop_fact))
+                                   ((bmc.depth() < trip.depth()*32) && (bmc.props() < trip.props() * bmc_prop_fact))
                                    )
                    ){
                 bmc.unrollCycle();

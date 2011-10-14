@@ -142,6 +142,7 @@ void BasicBmc::unrollCycle()
 
 void BasicBmc::decideCycle()
 {
+    double time_before = cpuTime();
     // Do SAT-tests:
     unresolved_safety = 0;
     for (SafeProp p = 0; p < tip.safe_props.size(); p++){
@@ -153,11 +154,7 @@ void BasicBmc::decideCycle()
         assert(psig_unroll != sig_Undef);
         Lit plit = cl.clausify(psig_unroll);
 
-        double solve_time_before = cpuTime();
-        bool ret = s.solve(~plit);
-        solve_time += cpuTime() - solve_time_before;
-        
-        if (ret){
+        if (s.solve(~plit)){
             // Property falsified, create and extract trace:
             Trace             cex    = tip.newTrace();
             vec<vec<lbool> >& frames = tip.traces[cex].frames;
@@ -184,11 +181,7 @@ void BasicBmc::decideCycle()
         assert(loop_now != lit_Undef);
         assert(live_in_loop != lit_Undef);
 
-        double solve_time_before = cpuTime();
-        bool ret = s.solve(loop_now, live_in_loop);
-        solve_time += cpuTime() - solve_time_before;
-        
-        if (ret){
+        if (s.solve(loop_now, live_in_loop)){
 #if 0
             // Debug:
             for (int i = 0; i < live_data.size(); i++){
@@ -217,6 +210,7 @@ void BasicBmc::decideCycle()
             unresolved_liveness++;
     }
 
+    solve_time += cpuTime() - time_before;
 }
 
 
@@ -229,22 +223,17 @@ bool BasicBmc::done()
 void BasicBmc::printStats(bool final)
 {
     if (tip.verbosity >= 1){
-        printf("[bmc] k=%3d, vrs=%8.3g, cls=%8.3g, con=%8.3g",
-               cycle-1, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts);
-        if (tip.verbosity >= 2)
-            printf(", time(solve=%6.1f s)\n",
-                   solve_time);
-        else
-            printf("\n");
-
+        printf("[bmc] k=%3d, vrs=%8.3g, cls=%8.3g, con=%8.3g, time=%.1f s\n",
+               cycle-1, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts, solve_time);
         if (final)
             s.printStats();
     }
 }
 
-uint64_t BasicBmc::props(){ return s.propagations; }
-double   BasicBmc::time (){ return solve_time; }
-int      BasicBmc::depth(){ return cycle; }
+uint64_t BasicBmc::props (){ return s.propagations; }
+uint64_t BasicBmc::solves(){ return s.solves; }
+double   BasicBmc::time  (){ return solve_time; }
+int      BasicBmc::depth (){ return cycle; }
 
 
 //=================================================================================================
