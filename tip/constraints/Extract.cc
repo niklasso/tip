@@ -30,9 +30,6 @@ namespace {
 template<class Clausifyer>
 bool initializeCands            (const TipCirc& tip, Solver& s, Clausifyer& cl, vec<Sig>& cands, bool only_coi);
 
-template<class Clausifyer>
-bool initializeCandsIter        (const TipCirc& tip, Solver& s, Clausifyer& cl, vec<Sig>& cands, bool only_coi);
-
 bool refineCandsBaseInSequence  (const TipCirc& tip, vec<Sig>& cands, bool only_coi = false);
 void refineCandsStepInSequence  (const TipCirc& tip, vec<Sig>& cands);
 bool refineCandsBaseWithMinimize(const TipCirc& tip, vec<Sig>& cands, bool only_coi = false);
@@ -111,7 +108,13 @@ bool initializeCands(const TipCirc& tip, Solver& s, Clausifyer& cl, vec<Sig>& ca
     // State that some property should be false:
     vec<Lit> some_bad;
     for (SafeProp p = 0; p < tip.safe_props.size(); p++)
-        some_bad.push(~cl.clausify(tip.safe_props[p].sig));
+        if (tip.safe_props[p].stat == pstat_Unknown)
+            some_bad.push(~cl.clausify(tip.safe_props[p].sig));
+    for (LiveProp p = 0; p < tip.live_props.size(); p++)
+        if (tip.live_props[p].stat == pstat_Unknown){
+            assert(tip.live_props[p].sigs.size() == 1);
+            some_bad.push(cl.clausify(tip.live_props[p].sigs[0]));
+        }
     s.addClause(some_bad);
     
     if (!s.solve()) return false;
@@ -131,83 +134,6 @@ bool initializeCands(const TipCirc& tip, Solver& s, Clausifyer& cl, vec<Sig>& ca
 
     return true;
 }
-
-
-template<class Clausifyer>
-bool initializeCandsIter(const TipCirc& tip, Solver& s, Clausifyer& cl, vec<Sig>& cands, bool only_coi)
-{
-#if 0
-    // For testing: make sure that all of the circuit is included as candidates:
-    for (GateIt git = tip.main.begin(); git != tip.main.end(); ++git)
-        cl.clausify(*git);
-#endif
-
-    // If we dont only want what is in the property cone-of-influence as candidates, also clausify
-    // what's reachable from flops:
-    if (!only_coi)
-        for (SeqCirc::FlopIt f = tip.flpsBegin(); f != tip.flpsEnd(); ++f)
-            cl.clausify(tip.flps.next(*f));
-    // TODO: do we miss important candidates with the skipped gates (not in cone-of-influence of
-    // some property)? Yes, but check how much!
-    
-    // State that some property should be false:
-    vec<Lit> some_bad;
-    for (SafeProp p = 0; p < tip.safe_props.size(); p++)
-        some_bad.push(~cl.clausify(tip.safe_props[p].sig));
-    s.addClause(some_bad);
-    
-    if (!s.solve()) return false;
-
-    GMap<lbool> model;
-    int         n_skipped = 0;
-    for (GateIt git = tip.main.begin(); git != tip.main.end(); ++git){
-        lbool val = cl.modelValue(*git, model);
-        if (val != l_Undef)
-            cands.push(mkSig(*git, val == l_False));
-        else
-            n_skipped++;
-    }
-
-    s.rnd_pol = true;
-    for (int iters = 0; iters < 100; iters++){
-#if 0
-        vec<Lit> blocking_clause;
-        for (InpIt iit = tip.main.inpBegin(); iit != tip.main.inpEnd(); ++iit){
-            lbool ival = cl.modelValue(*iit);
-            if (ival != l_Undef)
-                blocking_clause.push(cl.lookup(*iit) ^ (ival == l_True));
-        }
-        assert(blocking_clause.size() > 0);
-        s.addClause(blocking_clause);
-#endif
-
-        if (tip.verbosity >= 2)
-            printf("[initializeCandsIter] #cand=%8d, #vars=%8d, #clauses=%8d, #learnts=%6d, #conf=%6d, #solves=%4d, cpu-time=%6.2f\n",
-                   cands.size(),
-                   s.nVars(), s.nClauses(), s.nLearnts(), (int)s.conflicts, (int)s.solves, cpuTime());
-
-        if (!s.solve())
-            break;
-
-        int i, j;
-        for (i = j = 0; i < cands.size(); i++){
-            if (cl.modelValue(cands[i], model) == l_True)
-                cands[j++] = cands[i];
-            else {
-                if (cl.modelValue(cands[i], model) == l_Undef)
-                    n_skipped++;
-            }
-        }
-        cands.shrink(i - j);
-    }
-    s.rnd_pol = false;
-
-    printf("[initializeCands] prepared %d initial constraint candidates, skipping %d.\n",
-           cands.size(), n_skipped);
-
-    return true;
-}
-
 
 
 // Note: candidate outputs are topologically ordered which may be useful ...
@@ -457,9 +383,9 @@ void semanticConstraintExtraction(TipCirc& tip, bool use_minimize_alg, bool only
     double time_before = cpuTime();
 
     // FIXME: assumes no previous constraints for now.
-    assert(tip.cnstrs.size() == 0);
-    // FIXME: assumes no liveness properties for now.
-    assert(tip.live_props.size() == 0);
+    // assert(tip.cnstrs.size() == 0);
+    // // FIXME: assumes no liveness properties for now.
+    // assert(tip.live_props.size() == 0);
 
     vec<Sig> cnstrs;
     bool     result = use_minimize_alg ? refineCandsBaseWithMinimize(tip, cnstrs, only_coi) 
