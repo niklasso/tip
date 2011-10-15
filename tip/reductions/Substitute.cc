@@ -21,6 +21,29 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Tip {
 
+// TODO: specify when this is ok to use w.r.t constraints and such.
+void substitute(TipCirc& tip, const Equivs& eqs)
+{
+    Circ      copy;
+    Flops     cflps;
+    GMap<Sig> cmap;
+    copyCircWithSubst(tip.main, copy, eqs, cmap);
+
+    for (SeqCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
+        assert(!sign(cmap[*flit]));
+        Gate f      = gate(cmap[*flit]);
+        Sig  f_next = cmap[gate(tip.flps.next(*flit))] ^ sign(tip.flps.next(*flit));
+        cflps.define(f, f_next, tip.flps.init(*flit));
+        // TODO: this should happen in 'define()' but can't at the moment.
+        copy.number(f) = tip.main.number(f);
+    }
+    copy .moveTo(tip.main);
+    cflps.moveTo(tip.flps);
+
+    tip.updateRoots(cmap);
+}
+
+
 void substituteConstraints(TipCirc& tip)
 {
     Circ      copy;

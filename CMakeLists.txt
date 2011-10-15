@@ -46,6 +46,7 @@ set(TIP_LIB_SOURCES
     tip/reductions/RemoveUnused.cc
     tip/reductions/ExtractSafety.cc
     tip/reductions/Substitute.cc
+    tip/reductions/TemporalDecomposition.cc
     tip/TipCirc.cc)
 
 add_library(tip-lib-static STATIC ${TIP_LIB_SOURCES})

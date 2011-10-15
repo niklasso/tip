@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/reductions/RemoveUnused.h"
 #include "tip/reductions/Substitute.h"
 #include "tip/reductions/ExtractSafety.h"
+#include "tip/reductions/TemporalDecomposition.h"
 
 using namespace Minisat;
 using namespace Tip;
@@ -56,6 +57,7 @@ int main(int argc, char** argv)
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
     BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
     BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
+    BoolOption td  ("MAIN", "td",   "Use temporal decomposition.", false);
     BoolOption xsafe("MAIN", "xsafe", "Extract extra safety properties.", false);
     StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
     IntOption rip_bmc("RIP", "rip-bmc", "Bmc-mode to use in Rip-engine (0=none, 1=safe, 2=live).", 1);
@@ -98,6 +100,11 @@ int main(int argc, char** argv)
         substituteConstraints(tc);
         tc.stats();
         removeUnusedLogic(tc);
+        tc.stats();
+    }
+
+    if (td){
+        temporalDecomposition(tc);
         tc.stats();
     }
 

@@ -792,6 +792,7 @@ namespace Tip {
                 if (tip.safe_props[p].stat == pstat_Unknown){
                     lbool prop_res = l_False;
                     do {
+                        // printf("[decideCycle] checking safety property %d in cycle %d\n", p, size());
                         prop_res = proveProp(tip.safe_props[p].sig, pred);
                         if (prop_res == l_False){
                             if (!proveRec(pred, start)){
@@ -895,14 +896,12 @@ namespace Tip {
                 fflush(stdout);
             }
             
-#if 0
             if (tip.verbosity >= 3){
                 printf("[rip-stats] #clauses=%d, depth=%d\n", n_total, size());
                 init.printStats();
                 prop.printStats();
                 step.printStats();
             }
-#endif
         }
 
 

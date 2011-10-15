@@ -1,4 +1,4 @@
-/************************************************************************************[Substitute.h]
+/*************************************************************************[TemporalDecomposition.h]
 Copyright (c) 2011, Niklas Sorensson
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -16,16 +16,15 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#ifndef Tip_Substitute_h
-#define Tip_Substitute_h
+#ifndef Tip_TemporalDecomposition_h
+#define Tip_TemporalDecomposition_h
 
-#include "mcl/Equivs.h"
 #include "tip/TipCirc.h"
 
 namespace Tip {
 
-void substitute           (TipCirc& tip, const Equivs& eqs);
-void substituteConstraints(TipCirc& tip);
+void temporalDecomposition(TipCirc& tip, unsigned cycles);
+void temporalDecomposition(TipCirc& tip);
 
 //=================================================================================================
 } // namespace Tip
