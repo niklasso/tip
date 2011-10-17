@@ -201,6 +201,12 @@ bool refineCandsBaseWithMinimize(const TipCirc& tip, vec<Sig>& cands, bool only_
     if (!initializeCands(tip, s, cl, cands, only_coi))
         return false;
 
+    for (unsigned int i = 0; i < tip.cnstrs.size(); i++) {
+        Lit rep = cl.clausify(tip.cnstrs[i][0]);
+        for (int j = 1; j < tip.cnstrs[i].size(); j++)
+          cl.clausifyAs(tip.cnstrs[i][j],rep);
+    }
+
     do {
         if (tip.verbosity >= 2)
             printf("[refineCandsBaseWithMinimize] #cand=%8d, #vars=%8d, #clauses=%8d, #learnts=%6d, #conf=%6d, #solves=%4d, cpu-time=%6.2f\n",
@@ -297,6 +303,15 @@ void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands)
 
     unroller(umap0);
     unroller(umap1);
+
+    for (unsigned int i = 0; i < tip.cnstrs.size(); i++) {
+        Lit rep0 = cl.clausify(umap0[gate(tip.cnstrs[i][0])]^sign(tip.cnstrs[i][0]));
+        Lit rep1 = cl.clausify(umap1[gate(tip.cnstrs[i][0])]^sign(tip.cnstrs[i][0]));
+        for (int j = 1; j < tip.cnstrs[i].size(); j++) {
+          cl.clausifyAs(umap0[gate(tip.cnstrs[i][j])]^sign(tip.cnstrs[i][j]),rep0);
+          cl.clausifyAs(umap1[gate(tip.cnstrs[i][j])]^sign(tip.cnstrs[i][j]),rep1);
+        }
+    }
 
     // loop:
     //   add clause (~cands) in umap0
