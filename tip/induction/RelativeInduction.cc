@@ -125,6 +125,7 @@ namespace Tip {
 
             // Check if clause 'c' is subsumed by any previously proved clause. Returns true if it is and
             // false otherwise.
+            bool             fwdSubsumed  (const Clause* c, unsigned& cycle);
             bool             fwdSubsumed  (const Clause* c);
 
             // Find and remove all previously proved claues that are subsumed by the new clause 'c'. If an
@@ -534,6 +535,7 @@ namespace Tip {
             }
             Clause& c = cycle != cycle_Undef ? *F[cycle].last() : *F_inv.last();
             assert(c.size() > 0);
+
             assert(!fwdSubsumed(&c_));
             n_total++;
             cls_added++;
@@ -601,7 +603,7 @@ namespace Tip {
         
 
         // PRECONDITION: (incomplete?) 'c' must not already exist in the forward subsumption index.
-        bool Trip::fwdSubsumed(const Clause* c)
+        bool Trip::fwdSubsumed(const Clause* c, unsigned& cycle)
         {
             for (unsigned i = 0; i < c->size(); i++){
                 Sig x = (*c)[i];
@@ -611,10 +613,18 @@ namespace Tip {
                 for (int j = 0; j < fwd_occurs[x].size(); j++)
                     if (fwd_occurs[x][j]->isActive() && subsumes(*fwd_occurs[x][j], *c)){
                         cands_fwdsub++;
+                        cycle = fwd_occurs[x][j]->cycle;
                         return true;
                     }
             }
             return false;
+        }
+
+
+        bool Trip::fwdSubsumed(const Clause* c)
+        {
+            unsigned apa;
+            return fwdSubsumed(c, apa);
         }
 
         
@@ -825,10 +835,14 @@ namespace Tip {
                 if (sc == NULL)
                     break;
 
-                if (fwdSubsumed(&(const Clause&)*sc)){
-                    // FIXME: 'sc' should be scheduled in the future, +1 from the clause that
-                    // subsumed it.
-                    continue; }
+                unsigned sub_cycle;
+                if (fwdSubsumed(&(const Clause&)*sc, sub_cycle)){
+                    if (sub_cycle != cycle_Undef && sub_cycle+1 < size()){
+                        assert(sub_cycle >= sc->cycle);
+                        sc->cycle = sub_cycle+1;
+                        enqueueClause(sc); }
+                    continue;
+                }
 
                 Clause minimized;
                 static unsigned iters = 0;
