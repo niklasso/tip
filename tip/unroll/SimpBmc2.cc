@@ -746,6 +746,7 @@ void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             if (ret){
                 Trace cex = tip.newTrace();
                 unroll.extractTrace(s, tip.traces[cex].frames);
+                tip.adaptTrace(tip.traces[cex].frames);
                 tip.safe_props[p].stat = pstat_Falsified;
                 tip.safe_props[p].cex  = cex;
             }else{

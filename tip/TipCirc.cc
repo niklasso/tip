@@ -197,13 +197,8 @@ namespace Tip {
 
     }
 
-    void TipCirc::printTrace(FILE* out, const vec<vec<lbool> >& tr) const
+    void TipCirc::printTrace(FILE* out, const vec<vec<lbool> >& frames) const
     {
-        // Apply the trace adaptor before printing it:
-        vec<vec<lbool> > frames;
-        copy(tr, frames);
-        if (tradaptor != NULL) tradaptor->adapt(frames);
-
         for (int i = 0; i < frames.size(); i++){
             for (int j = 0; j < frames[i].size(); j++)
                 if (frames[i][j] == l_Undef)

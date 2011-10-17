@@ -841,6 +841,7 @@ namespace Tip {
                                 Trace             cex    = tip.newTrace();
                                 vec<vec<lbool> >& frames = tip.traces[cex].frames;
                                 extractTrace(start, frames);
+                                tip.adaptTrace(frames);
                                 tip.safe_props[p].stat   = pstat_Falsified;
                                 tip.safe_props[p].cex    = cex;
                                 break;

@@ -219,7 +219,8 @@ public:
 
     SafeProp newSafeProp (Sig x);
     LiveProp newLiveProp (const vec<Sig>& x);
-    Trace    newTrace    ()     ;
+    Trace    newTrace    ();
+    void     adaptTrace  (vec<vec<lbool> >& frames);
 
     void     extractRoots(vec<Sig>& xs);
     void     updateRoots (GMap<Sig>& cmap);
@@ -249,6 +250,8 @@ inline LiveProp TipCirc::newLiveProp (const vec<Sig>& s) {
 
 inline SafeProp TipCirc::newSafeProp (Sig x){ safe_props.push(SafePropData(x)); return safe_props.size()-1; }
 inline Trace    TipCirc::newTrace    ()     { traces.push(); return traces.size()-1; }
+inline void     TipCirc::adaptTrace  (vec<vec<lbool> >& frames){ if (tradaptor != NULL) tradaptor->adapt(frames); }
+
 
 //=================================================================================================
 
