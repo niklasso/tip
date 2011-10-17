@@ -165,6 +165,14 @@ namespace Tip {
             else
                 n_unknown++;
 
+        for (LiveProp p = 0; p < live_props.size(); p++)
+            if (live_props[p].stat == pstat_Proved)
+                n_proved++;
+            else if (live_props[p].stat == pstat_Falsified)
+                n_falsified++;
+            else
+                n_unknown++;
+
         printf("Verification results\n");
         printf("================================================================================\n");
         printf("  Proved :    %d\n", n_proved);
