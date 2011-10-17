@@ -392,8 +392,10 @@ void semanticConstraintExtraction(TipCirc& tip, bool use_minimize_alg, bool only
                                        : refineCandsBaseInSequence  (tip, cnstrs, only_coi) ;
 
     if (!result){
-        printf("UNIMPLEMENTED: all properties combinationally proved.\n");
-        exit(1); }
+        printf("All properties combinationally proved! Setting constraint 'true = false'.\n");
+        tip.cnstrs.merge(sig_False,sig_True);
+        return;
+    }
 
     if (use_minimize_alg)
         refineCandsStepWithMinimize(tip, cnstrs);
