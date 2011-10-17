@@ -986,7 +986,7 @@ namespace Tip {
             // TODO: work on better heuristics here.
             if (bmc_mode == ripbmc_Live)
                 while (!bmc->done() && ((bmc->depth() < trip.depth() * 0.5) || 
-                                       ((bmc->depth() < trip.depth()*32) && (bmc->props() < trip.props() * 0.5))
+                                       ((bmc->depth() < trip.depth()*8) && (bmc->props() < trip.props() * 0.5))
                                        )
                        ){
                     bmc->unrollCycle();
