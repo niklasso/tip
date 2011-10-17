@@ -94,17 +94,17 @@ int main(int argc, char** argv)
         removeUnusedLogic(tc);
         tc.stats(); }
 
+    if (td){
+        temporalDecomposition(tc);
+        tc.stats();
+    }
+
     if (sce > 0){
         tc.sce(sce == 1, false);
         tc.stats();
         substituteConstraints(tc);
         tc.stats();
         removeUnusedLogic(tc);
-        tc.stats();
-    }
-
-    if (td){
-        temporalDecomposition(tc);
         tc.stats();
     }
 
