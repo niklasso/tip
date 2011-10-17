@@ -290,7 +290,16 @@ namespace Tip {
             printf("\n");
         }
 
-        // TODO: print constraints?
+        printf("CONSTRAINTS:\n");
+        for (unsigned i = 0; i < cnstrs.size(); i++){
+            printf("{ ");
+            for (int j = 0; j < cnstrs[i].size(); j++){
+                if (j > 0) printf(", ");
+                printSig(cnstrs[i][j]);
+            }
+            printf(" }\n");
+        }
+
 
         printf("LIVENESS PROPERTIES:\n");
         for (LiveProp p = 0; p < live_props.size(); p++){
