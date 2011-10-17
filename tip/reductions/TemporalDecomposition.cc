@@ -294,21 +294,27 @@ namespace Tip {
 
 
 
-void temporalDecomposition(TipCirc& tip)
+void temporalDecompositionSmart(TipCirc& tip, unsigned min_cycles)
 {
     Equivs   eqs;
     unsigned cycle = 0;
+
     detectEquivalentFlops(tip, eqs, cycle);
 
-    if (eqs.size() > 0){
+    if (eqs.size() > 0 || min_cycles > 0){
+        if (min_cycles > cycle)
+            cycle = min_cycles;
+
+        printf("[temporalDecomposition] unrolling %d cycles.\n", cycle);
         temporalDecomposition(tip, cycle);
-        substitute(tip, eqs);
-        tip.stats();
+
+        if (eqs.size() > 0){
+            substitute(tip, eqs);
+            tip.stats(); }
         removeUnusedLogic(tip);
         tip.stats();
     }
 }
-
 
 
 void temporalDecomposition(TipCirc& tip, unsigned cycles)

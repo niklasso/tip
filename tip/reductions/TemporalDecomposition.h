@@ -23,8 +23,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Tip {
 
-void temporalDecomposition(TipCirc& tip, unsigned cycles);
-void temporalDecomposition(TipCirc& tip);
+void temporalDecomposition     (TipCirc& tip, unsigned cycles);
+void temporalDecompositionSmart(TipCirc& tip, unsigned cycles = 0);
 
 //=================================================================================================
 } // namespace Tip
