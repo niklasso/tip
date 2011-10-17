@@ -363,12 +363,12 @@ void temporalDecomposition(TipCirc& tip, unsigned cycles)
             for (int j = 1; j < tip.cnstrs[i].size(); j++){
                 Sig y = cmap[gate(tip.cnstrs[i][j])] ^ sign(tip.cnstrs[i][j]);
                 init_constr = tip.init.mkAnd(init_constr, ~tip.init.mkXor(x, y));
-                printf("x = ");
-                printSig(x);
-                printf("\n");
-                printf("y = ");
-                printSig(y);
-                printf("\n");
+                // printf("x = ");
+                // printSig(x);
+                // printf("\n");
+                // printf("y = ");
+                // printSig(y);
+                // printf("\n");
             }
         }
     }
