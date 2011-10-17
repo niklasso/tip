@@ -323,6 +323,7 @@ void temporalDecomposition(TipCirc& tip, unsigned cycles)
             init_frame_size = tip.init.number(*iit)+1;
     unsigned       next_number = init_frame_size;
 
+    Sig init_constr = sig_True;
     for (unsigned i = 0; i < cycles; i++){
         GMap<Sig> cmap(tip.main.lastGate(), sig_Undef);
         for (int i = 0; i < tip.flps.size(); i++){
@@ -349,6 +350,21 @@ void temporalDecomposition(TipCirc& tip, unsigned cycles)
             flps.define(f, f_next, f_init);
         }
         flps.moveTo(tip.flps);
+
+        // Build constraint logic:
+        for (unsigned i = 0; i < tip.cnstrs.size(); i++){
+            Sig x = cmap[gate(tip.cnstrs[i][0])] ^ sign(tip.cnstrs[i][0]);
+            for (int j = 1; j < tip.cnstrs[i].size(); j++){
+                Sig y = cmap[gate(tip.cnstrs[i][j])] ^ sign(tip.cnstrs[i][j]);
+                init_constr = tip.init.mkAnd(init_constr, ~tip.init.mkXor(x, y));
+                printf("x = ");
+                printSig(x);
+                printf("\n");
+                printf("y = ");
+                printSig(y);
+                printf("\n");
+            }
+        }
     }
 
 #if 0
@@ -359,8 +375,12 @@ void temporalDecomposition(TipCirc& tip, unsigned cycles)
 
     tip.tradaptor = new TempDecompAdaptor(init_frame_size, init_num_map, tip.tradaptor);
 
-    // TODO: handle constraints.
-    assert(tip.cnstrs.size() == 0);
+    if (init_constr != sig_True){
+        printf("[temporalDecomposition] Adding a constraint flop.\n");
+        Sig f = tip.main.mkInp();
+        tip.flps.define(gate(f), sig_True, init_constr);
+        tip.cnstrs.merge(sig_True, f);
+    }
 }
 
 
