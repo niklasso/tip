@@ -57,7 +57,7 @@ namespace Tip {
             SMap<vec<Clause*> >  fwd_occurs;
 
             // Solver data: Should be rederivable from only independent data at any time:
-            InitInstance         init;
+            InitInstance2        init;
             PropInstance         prop;
             StepInstance         step;
 
@@ -78,6 +78,9 @@ namespace Tip {
 
             // Find a maximal generalization of c that still is subsumed by init.
             void             generalize(Clause& c);
+
+            // Find a maximal generalization of c that holds in initial states.
+            void             generalizeInit(Clause& c);
 
             // PROVE:   let k = F.size()-1: F_inv ^ F[k] ^ Trans => p'
             // RETURNS: l_True if the property is implied by the invariants alone,
@@ -210,6 +213,42 @@ namespace Tip {
         }
 
 
+        void Trip::generalizeInit(Clause& c)
+        {
+            assert(c.cycle == 0);
+            Clause try_remove = c;
+            Clause d          = c;
+            Clause empty;
+
+            if (tip.verbosity >= 4){
+                printf("[generalizeInit] begin d = ");
+                printClause(d);
+                printf("\n"); }
+
+            for (unsigned i = 0; d.size() > 1 && i < try_remove.size(); i++)
+                if (find(d, try_remove[i])){
+                    Clause cand = d - try_remove[i];
+                    if (tip.verbosity >= 4){
+                        printf("[generalizeInit] cand = ");
+                        printClause(cand);
+                        printf("\n"); }
+                    if (init.prove(cand, empty, d)){
+                        assert(subsumes(d, cand));
+                        if (tip.verbosity >= 4){
+                            printf("[generalizeInit] refine d = ");
+                            printClause(d);
+                            printf("\n"); }
+                    }
+                }
+            assert(subsumes(d, c));
+            c = d;
+            if (tip.verbosity >= 4){
+                printf("[generalizeInit] done c = ");
+                printClause(c);
+                printf("\n");}
+        }
+
+
         bool Trip::proveAndGeneralize(SharedRef<ScheduledClause> c, Clause& yes, SharedRef<ScheduledClause>& no)
         {
             Clause yes_init, yes_step;
@@ -218,6 +257,7 @@ namespace Tip {
                 // printf("[proveAndGeneralize] cycle-0:\n");
                 if (!init.prove(*c, empty, yes_init, no, c))
                     return false;
+                generalizeInit(yes_init);
                 yes_step = yes_init;
             }else{
                 if (!step.prove(*c, yes_step, no, c))
@@ -324,7 +364,7 @@ namespace Tip {
 
             tip.flps.define(gate(flp), out);
 
-            init.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
+            init.extendLiveness();
             prop.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
             step.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
 
@@ -690,12 +730,12 @@ namespace Tip {
                 const Clause& c = *F_inv[i];
                 vec<Lit>      cs;
                 for (unsigned j = 0; j < c.size(); j++)
-                    cs.push(~cl1.clausify(c[j]));
+                    cs.push(~cl0.clausify(c[j]));
 
                 if (s.solve(cs))
                     num_failed++;
             }
-            //printf("[verifyInvariant] invariant checked (base) cpu-time = %.2f s\n", cpuTime() - time_before);
+            // printf("[verifyInvariant] invariant checked (base) cpu-time = %.2f s\n", cpuTime() - time_before);
 
             if (num_failed > 0){
                 printf("WARNING! %d clauses not true in cycle 1.\n", num_failed);
@@ -919,6 +959,7 @@ namespace Tip {
         BasicBmc* bmc = new BasicBmc(tip);
 
         // Necessary BMC for relative induction to be sound:
+        // TODO: shrink the number of cycles since the initial instance doesn't unroll?
         for (int i = 0; !bmc->done() && i < 2; i++){
             bmc->unrollCycle();
             bmc->decideCycle();

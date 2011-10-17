@@ -155,6 +155,33 @@ namespace Tip {
     };
 
 
+    class InitInstance2 {
+        const TipCirc& tip;
+        
+        SimpSolver*    solver;
+        GMap<Lit>      umapl[2];
+        vec<Lit>       inputs;
+        LitSet         lset;
+        
+        void reset();
+        
+    public:
+        InitInstance2(const TipCirc& t_);
+        ~InitInstance2();
+        
+        bool prove(const Clause& c, const Clause& bot, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
+        bool prove(const Clause& c, const Clause& bot, Clause& yes);
+
+        void reduceClause(Clause& c);
+
+        void extendLiveness();
+
+        uint64_t props();
+        uint64_t solves();
+        void printStats();
+    };
+
+
     //===================================================================================================
     class PropInstance {
         const TipCirc&            tip;
