@@ -57,10 +57,10 @@ int main(int argc, char** argv)
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
     BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
     BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
-    IntOption td   ("MAIN", "td",   "Use temporal decomposition.", 0, IntRange(-1, INT32_MAX));
+    IntOption td   ("MAIN", "td",   "Use temporal decomposition (-2=auto, -1=none, otherwise minimum unrolling).", -2, IntRange(-1, INT32_MAX));
     BoolOption xsafe("MAIN", "xsafe", "Extract extra safety properties.", false);
     StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
-    IntOption rip_bmc("RIP", "rip-bmc", "Bmc-mode to use in Rip-engine (0=none, 1=safe, 2=live).", 1);
+    IntOption rip_bmc("RIP", "rip-bmc", "Bmc-mode to use in Rip-engine (-1=auto, 0=none, 1=safe, 2=live).", -1);
 
     parseOptions(argc, argv, true);
 
@@ -76,6 +76,32 @@ int main(int argc, char** argv)
     // Simple algorithm flow for testing:
     tc.readAiger(argv[1]);
     tc.stats();
+
+    // Choose aut-modes based on presence of liveness properties:
+    unsigned num_live = 0;
+    for (LiveProp p = 0; p < tc.live_props.size(); p++)
+        if (tc.live_props[p].stat == pstat_Unknown)
+            num_live++;
+
+    RipBmcMode rbmc;
+    if (rip_bmc != -1)
+        rbmc = (RipBmcMode)(int)rip_bmc;
+    else{
+        if (num_live > 0)
+            rbmc = ripbmc_Live;
+        else
+            rbmc = ripbmc_Safe;
+    }
+
+    int td_depth;
+    if (td != -2)
+        td_depth = td;
+    else{
+        if (num_live > 0)
+            td_depth = 0;
+        else
+            td_depth = 2;
+    }
 
     // Extract extra safety properties
     if (xsafe)
@@ -94,8 +120,8 @@ int main(int argc, char** argv)
         removeUnusedLogic(tc);
         tc.stats(); }
 
-    if (td != -1)
-        temporalDecompositionSmart(tc, td);
+    if (td_depth != -1)
+        temporalDecompositionSmart(tc, td_depth);
 
     if (sce > 0){
         tc.sce(sce == 1, false);
@@ -109,7 +135,7 @@ int main(int argc, char** argv)
     if (strcmp(alg, "bmc") == 0)
         tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);
     else if (strcmp(alg, "rip") == 0)
-        tc.trip((RipBmcMode)(int)rip_bmc);
+        tc.trip(rbmc);
     else if (strcmp(alg, "live") == 0)
         checkLiveness(tc,depth);
     else if (strcmp(alg, "biere") == 0)
