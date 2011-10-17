@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #define GENERALIZE_THEN_PUSH
 //#define VERIFY_SUBSUMPTION
+//#define VERIFY_INVARIANT
 
 namespace Tip {
 
@@ -1000,7 +1001,9 @@ namespace Tip {
         // If some property was proved, print the invariant:
         for (SafeProp p = 0; p < tip.safe_props.size(); p++)
             if (tip.safe_props[p].stat == pstat_Proved){
+#ifdef VERIFY_INVARIANT
                 trip.verifyInvariant();
+#endif
                 if (tip.verbosity >= 3){
                     printf("[relativeInduction] invariant:\n");
                     trip.printInvariant(); }
