@@ -1023,6 +1023,8 @@ namespace Tip {
                    init.solves(), step.solves(), prop.solves());
             printf("  Propagations:    %12"PRIu64"   %12"PRIu64"  %12"PRIu64"\n",
                    init.props(), step.props(), prop.props());
+            printf("  CPU-Time:        %12.1f s %12.1f s %12.1f s\n",
+                   init.time(), step.time(), prop.time());
         }
 
 

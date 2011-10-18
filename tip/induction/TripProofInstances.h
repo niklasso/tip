@@ -135,7 +135,8 @@ namespace Tip {
         vec<Lit>       outputs;
         Lit            act_cnstrs;
         LitSet         lset;
-        
+        double         cpu_time;
+
         void reset();
         
     public:
@@ -151,6 +152,8 @@ namespace Tip {
 
         uint64_t props();
         uint64_t solves();
+        double   time();
+
         void printStats();
     };
 
@@ -162,6 +165,7 @@ namespace Tip {
         GMap<Lit>      umapl[2];
         vec<Lit>       inputs;
         LitSet         lset;
+        double         cpu_time;
         
         void reset();
         
@@ -178,6 +182,8 @@ namespace Tip {
 
         uint64_t props();
         uint64_t solves();
+        double   time();
+
         void printStats();
     };
 
@@ -187,13 +193,14 @@ namespace Tip {
         const TipCirc&            tip;
         const vec<vec<Clause*> >& F;
         
-        SimpSolver*         solver;
-        GMap<Lit>           umapl[2];
-        vec<Lit>            inputs;
-        vec<Lit>            outputs;
-        Lit                 act_cycle;
-        Lit                 act_cnstrs;
-        LitSet              lset;
+        SimpSolver*    solver;
+        GMap<Lit>      umapl[2];
+        vec<Lit>       inputs;
+        vec<Lit>       outputs;
+        Lit            act_cycle;
+        Lit            act_cnstrs;
+        LitSet         lset;
+        double         cpu_time;
         
         void reset();
         //lbool evaluate(const InstanceModel& model, Sig p);
@@ -211,6 +218,8 @@ namespace Tip {
 
         uint64_t props();
         uint64_t solves();
+        double   time();
+
         void printStats();
     };
 
@@ -228,6 +237,7 @@ namespace Tip {
         vec<unsigned>  cycle_clauses;
         Lit            act_cnstrs;
         LitSet         lset;
+        double         cpu_time;
         
         void reset();
         void evaluate(vec<Sig>& clause);
@@ -247,6 +257,8 @@ namespace Tip {
 
         uint64_t props();
         uint64_t solves();
+        double   time();
+
         void printStats();
     };
     

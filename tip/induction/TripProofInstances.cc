@@ -17,6 +17,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include "minisat/simp/SimpSolver.h"
+#include "minisat/utils/System.h"
 #include "mcl/Clausify.h"
 #include "tip/unroll/Unroll.h"
 #include "tip/induction/TripProofInstances.h"
@@ -337,6 +338,8 @@ namespace Tip {
         assert(next == NULL || &c_ == (Clause*)&*next);
         assert(subsumes(bot, c_));
 
+        double time_before = cpuTime();
+
         // printf("[InitInstance::prove] proving c_ = ");
         // printClause(tip, c_);
         // printf("\n");
@@ -458,6 +461,7 @@ namespace Tip {
             result = true;
         }
         solver->extend_model = true;
+        cpu_time += cpuTime() - time_before;
 
         return result;
     }
@@ -502,7 +506,7 @@ namespace Tip {
     }
 
 
-    InitInstance::InitInstance(const TipCirc& t) : tip(t), solver(NULL)
+    InitInstance::InitInstance(const TipCirc& t) : tip(t), solver(NULL), cpu_time(0)
     {
         reset();
     }
@@ -512,6 +516,7 @@ namespace Tip {
 
     uint64_t InitInstance::props (){ return solver->propagations; }
     uint64_t InitInstance::solves(){ return solver->solves; }
+    double   InitInstance::time  (){ return cpu_time; }
 
     void InitInstance::printStats()
     {
@@ -588,6 +593,8 @@ namespace Tip {
         assert(next == NULL || &c_ == (Clause*)&*next);
         assert(subsumes(bot, c_));
 
+        double time_before = cpuTime();
+
         // printf("[InitInstance::prove] proving c_ = ");
         // printClause(tip, c_);
         // printf("\n");
@@ -645,6 +652,7 @@ namespace Tip {
             result = true;
         }
         solver->extend_model = true;
+        cpu_time += cpuTime() - time_before;
 
         return result;
     }
@@ -663,7 +671,7 @@ namespace Tip {
     }
 
 
-    InitInstance2::InitInstance2(const TipCirc& t) : tip(t), solver(NULL)
+    InitInstance2::InitInstance2(const TipCirc& t) : tip(t), solver(NULL), cpu_time(0)
     {
         reset();
     }
@@ -673,6 +681,7 @@ namespace Tip {
 
     uint64_t InitInstance2::props (){ return solver->propagations; }
     uint64_t InitInstance2::solves(){ return solver->solves; }
+    double   InitInstance2::time  (){ return cpu_time; }
 
     void InitInstance2::printStats()
     {
@@ -755,10 +764,11 @@ namespace Tip {
 
     lbool PropInstance::prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle)
     {
-        Lit l = umapl[1][gate(p)] ^ sign(p);
+        double   time_before = cpuTime();
+        Lit      l = umapl[1][gate(p)] ^ sign(p);
         vec<Lit> assumps;
-        
-        //if (solver->solve(~l, act_cycle)){
+        lbool    result;
+
         if (solver->solve(~l, act_cycle, act_cnstrs)){
             assert(solver->modelValue(l) == l_False);
             // Found predecessor state to a bad state:
@@ -809,14 +819,16 @@ namespace Tip {
             //SharedRef<ScheduledClause> last(new ScheduledClause(dummy,  cycle+1, frames[1], NULL));
             SharedRef<ScheduledClause> pred(new ScheduledClause(clause, cycle,   frames[0], last));
             //printf("[PropInstance::prove] last = %p, pred = %p\n", last, pred);
-            no = pred;
-
-            return l_False;
+            no     = pred;
+            result = l_False;
         }else if (!solver->solve(~l, act_cnstrs))
             // Property is implied already by invariants:
-            return l_True;
+            result = l_True;
         else
-            return l_Undef;
+            result = l_Undef;
+        cpu_time += cpuTime() - time_before;
+
+        return result;
     }
 
 
@@ -871,7 +883,7 @@ namespace Tip {
 
 
     PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
-        : tip(t), F(F_), solver(NULL), act_cnstrs(lit_Undef)
+        : tip(t), F(F_), solver(NULL), act_cnstrs(lit_Undef), cpu_time(0)
     {
         reset();
     }
@@ -881,6 +893,7 @@ namespace Tip {
 
     uint64_t PropInstance::props (){ return solver->propagations; }
     uint64_t PropInstance::solves(){ return solver->solves; }
+    double   PropInstance::time  (){ return cpu_time; }
 
     void PropInstance::printStats()
     {
@@ -982,6 +995,7 @@ namespace Tip {
     {
         assert(next == NULL || &c == (Clause*)&*next);
         assert(c.cycle > 0);
+        double   time_before = cpuTime();
         vec<Lit> shrink_root;
         vec<Lit> inputs;
         vec<Lit> assumes;
@@ -1112,6 +1126,7 @@ namespace Tip {
             //printf("[StepInstance::prove] &yes = %p\n", &yes);
             result = true;
         }
+        cpu_time += cpuTime() - time_before;
 
         return result;
     }
@@ -1157,7 +1172,7 @@ namespace Tip {
     }
 
     StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
-        : tip(t), F(F_), solver(NULL)
+        : tip(t), F(F_), solver(NULL), cpu_time(0)
     {
         reset();
     }
@@ -1167,6 +1182,7 @@ namespace Tip {
 
     uint64_t StepInstance::props (){ return solver->propagations; }
     uint64_t StepInstance::solves(){ return solver->solves; }
+    double   StepInstance::time  (){ return cpu_time; }
 
     void StepInstance::printStats()
     {
