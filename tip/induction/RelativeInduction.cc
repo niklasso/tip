@@ -65,7 +65,19 @@ namespace Tip {
             // Liveness to safety mapping:
             vec<EventCounter>    event_cnts;
 
+            // Statistics:
             double               cpu_time;
+            uint64_t             cls_added;
+            uint64_t             cls_moved;
+            uint64_t             cls_bwdsub;
+            uint64_t             cls_total_size;
+            uint64_t             cls_total_before;
+            uint64_t             cls_total_removed;
+
+            uint64_t             cands_added;
+            uint64_t             cands_fwdsub;
+            uint64_t             cands_total_size;
+            uint64_t             cands_total_removed;
 
             // PROVE:   let k = c.cycle: F_inv ^ F[k-1] ^ c ^ Trans => c'
             // RETURNS: True and a minimal stronger clause d (subset of c) that holds in a maximal cycle >= k,
@@ -140,10 +152,24 @@ namespace Tip {
 
             
         public:
+
             void             printInvariant  ();
             void             verifyInvariant ();
 
-            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), init(t), prop(t, F), step(t, F), cpu_time(0)
+            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), init(t), prop(t, F), step(t, F), 
+                               cpu_time  (0),
+                               cls_added (0),
+                               cls_moved (0),
+                               cls_bwdsub(0),
+                               cls_total_size(0),
+                               cls_total_before(0),
+                               cls_total_removed(0),
+
+                               cands_added        (0),
+                               cands_fwdsub       (0),
+                               cands_total_size   (0),
+                               cands_total_removed(0)
+
             {
                 F.push();
                 F_size.push(0);
@@ -176,6 +202,7 @@ namespace Tip {
 
 
             void printStats(unsigned curr_cycle = cycle_Undef, bool newline = true);
+            void printFinalStats();
         };
 
         void Trip::generalize(Clause& c)
@@ -509,6 +536,7 @@ namespace Tip {
             assert(c.size() > 0);
             assert(!fwdSubsumed(&c_));
             n_total++;
+            cls_added++;
 
             // printf("[addClause] c = ");
             // printClause(c);
@@ -581,8 +609,10 @@ namespace Tip {
                     continue;
 
                 for (int j = 0; j < fwd_occurs[x].size(); j++)
-                    if (fwd_occurs[x][j]->isActive() && subsumes(*fwd_occurs[x][j], *c))
+                    if (fwd_occurs[x][j]->isActive() && subsumes(*fwd_occurs[x][j], *c)){
+                        cands_fwdsub++;
                         return true;
+                    }
             }
             return false;
         }
@@ -616,7 +646,8 @@ namespace Tip {
 
             bool inv_found = false;
             for (int i = 0; i < occ.size(); i++)
-                if (occ[i] != c && occ[i]->isActive() && subsumes(*c, *occ[i]))
+                if (occ[i] != c && occ[i]->isActive() && subsumes(*c, *occ[i])){
+                    cls_bwdsub++;
                     if (removeClause(occ[i])){
                         if (verify){
                             printf("[bwdSubsume] spurious subsumption\n");
@@ -630,6 +661,7 @@ namespace Tip {
                         }
                         inv_found = true;
                     }
+                }
 
             return inv_found;
         }
@@ -768,6 +800,9 @@ namespace Tip {
                         c.cycle++;
                         if (proveStep(c, d)){
                             // NOTE: the clause F[i][j] will be removed by backward subsumption.
+                            cls_moved++;
+                            cls_bwdsub--; // Don't count this as a new clause.
+                            cls_added--;
                             if (addClause(d))
                                 extractInvariant();
                         }
@@ -801,6 +836,10 @@ namespace Tip {
                 if (proveAndGeneralize(sc, minimized, pred)){
                     if ((iters++ % 10) == 0) printStats(sc->cycle, false);
                     // TODO: plug memory leak of scheduled clauses if invariant is found.
+                    cls_total_size    += minimized.size();
+                    cls_total_before  += sc->size();
+                    cls_total_removed += sc->size() - minimized.size();
+
                     if (addClause(minimized)){
                         // FIXME: reference counting?
                         // delete sc;
@@ -812,6 +851,10 @@ namespace Tip {
                 }else if (sc->cycle == 0)
                     return false;
                 else{
+                    cands_added++;
+                    cands_total_size    += pred->size();
+                    cands_total_removed += tip.flps.size() - pred->size();
+
                     enqueueClause(pred);
                     enqueueClause(sc);
                 }
@@ -836,6 +879,9 @@ namespace Tip {
                         // printf("[decideCycle] checking safety property %d in cycle %d\n", p, size());
                         prop_res = proveProp(tip.safe_props[p].sig, pred);
                         if (prop_res == l_False){
+                            cands_added++;
+                            cands_total_size    += pred->size();
+                            cands_total_removed += tip.flps.size() - pred->size();
                             if (!proveRec(pred, start)){
                                 // 'p' was falsified.
                                 printf("[decideCycle] safety property %d was falsified!\n", p);
@@ -867,6 +913,9 @@ namespace Tip {
                         // printf("[decideCycle] checking liveness property %d in cycle %d\n", p, size());
                         prop_res = proveProp(~event_cnts[p].x, pred);
                         if (prop_res == l_False){
+                            cands_added++;
+                            cands_total_size    += pred->size();
+                            cands_total_removed += tip.flps.size() - pred->size();
                             if (!proveRec(pred, start)){
                                 // 'p' was falsified.
                                 // printf("[decideCycle] event counter for liveness property %d reached %d\n", p, event_cnts[p].k);
@@ -946,6 +995,36 @@ namespace Tip {
             }
         }
 
+        void Trip::printFinalStats()
+        {
+            printf("Rip statistics:\n");
+            printf("================================================================================\n");
+            printf("\n");
+            printf("Clauses:\n");
+            printf("  Added:             %"PRIu64"\n", cls_added);
+            printf("  Backward subsumed: %"PRIu64"\n", cls_bwdsub);
+            printf("  Moved:             %"PRIu64"\n", cls_moved);
+            printf("  Avg. size:         %.1f\n", cls_total_size / (double)cls_added);
+            printf("  Total Literals :   %"PRIu64" (%.1f%% deleted)\n", 
+                   cls_total_size, cls_total_removed * 100 / (double)cls_total_before);
+            printf("\n");
+            printf("\n");
+
+            printf("Candidate Clauses:\n");
+            printf("  Added:             %"PRIu64"\n", cands_added);
+            printf("  Forward subsumed:  %"PRIu64"\n", cands_fwdsub);
+            printf("  Avg. size:         %.1f\n", cands_total_size / (double)cands_added);
+            printf("  Total Literals :   %"PRIu64" (%.1f%% deleted)\n", 
+                   cands_total_size, cands_total_removed * 100 / (double)(tip.flps.size() * cands_added));
+            printf("\n");
+
+            printf("SAT-solving:      Init-Instance  Step-Instance Prop-Instance\n");
+            printf("  Solves:          %12"PRIu64"   %12"PRIu64"  %12"PRIu64"\n",
+                   init.solves(), step.solves(), prop.solves());
+            printf("  Propagations:    %12"PRIu64"   %12"PRIu64"  %12"PRIu64"\n",
+                   init.props(), step.props(), prop.props());
+        }
+
 
         void Trip::printClause(const Clause& c)
         {
@@ -977,8 +1056,13 @@ namespace Tip {
                 bmc->printStats ();
             }
 
-        if (bmc_mode != ripbmc_Live)
+        // TODO: implement a clear/reset method in bmc-class instead.
+        double bmc_time = 0;
+        if (bmc_mode != ripbmc_Live){
+            bmc_time = bmc->time();
             delete bmc;
+            bmc = NULL;
+        }
 
         while (!trip.decideCycle()){
             trip.printStats();
@@ -995,9 +1079,6 @@ namespace Tip {
                 }
         }
 
-        if (bmc_mode == ripbmc_Live)
-            delete bmc;
-
         // If some property was proved, print the invariant:
         for (SafeProp p = 0; p < tip.safe_props.size(); p++)
             if (tip.safe_props[p].stat == pstat_Proved){
@@ -1011,10 +1092,17 @@ namespace Tip {
             }
         // TODO: also check liveness
 
-        printf("Trip statistics:\n");
-        printf("================================================================================\n");
-        printf("CPU time: %.2f s\n", cpuTime() - time_before);
+        double total_time = cpuTime() - time_before;
+        trip.printFinalStats();
         printf("\n");
+        printf("CPU-time:\n");
+        printf("  Rip:   %.2f s\n", trip.time());
+        printf("  Bmc:   %.2f s\n", (bmc != NULL) ? bmc->time() : bmc_time);
+        printf("  Total: %.2f s\n", total_time);
+        printf("\n");
+
+        if (bmc != NULL)
+            delete bmc;
     }
 
 
