@@ -73,11 +73,11 @@ int main(int argc, char** argv)
     sigTerm(SIGINT_exit);
 
     TipCirc tc;
-    tc.verbosity = verb;
-
     // Simple algorithm flow for testing:
     tc.readAiger(argv[1]);
     tc.stats();
+    tc.verbosity = verb;
+
 
     // Choose aut-modes based on presence of liveness properties:
     unsigned num_live = 0;

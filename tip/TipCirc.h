@@ -225,6 +225,9 @@ public:
     void     extractRoots(vec<Sig>& xs);
     void     updateRoots (GMap<Sig>& cmap);
 
+    void     clear       ();
+    void     moveTo      (TipCirc& to);
+
     // Settings:
     int           verbosity;
 
@@ -234,7 +237,6 @@ public:
     
     void printTrace      (FILE* out, Trace t) const;
     void printTraceAiger (FILE* out, Trace tid) const;
-    void clear           ();
 };
 
 //=================================================================================================

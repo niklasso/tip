@@ -253,6 +253,31 @@ namespace Tip {
         traces.clear();
         safe_props.clear();
         live_props.clear();
+        cnstrs.clear();
+        fairs.clear();
+
+        verbosity = 0;
+    }
+
+
+    void TipCirc::moveTo(TipCirc& to)
+    {
+        // TODO: this should be SeqCirc::moveTo();
+        main.moveTo(to.main);
+        init.moveTo(to.init);
+        flps.moveTo(to.flps);
+
+        to.tradaptor = tradaptor;
+        tradaptor = NULL;
+
+        traces    .moveTo(to.traces);
+        safe_props.moveTo(to.safe_props);
+        live_props.moveTo(to.live_props);
+        cnstrs    .moveTo(to.cnstrs);
+        fairs     .moveTo(to.fairs);
+
+        to.verbosity = verbosity;
+        verbosity = 0;
     }
 
 
