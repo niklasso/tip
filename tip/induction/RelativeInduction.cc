@@ -42,6 +42,8 @@ namespace Tip {
         //===================================================================================================
         // Temporal Relative Induction Prover:
 
+        BoolOption opt_fwd_revive("RIP", "rip-fwd-rev", "Use revival of forward subsumed clauses.", false);
+
         class Trip {
             TipCirc&             tip;
 
@@ -65,6 +67,9 @@ namespace Tip {
             // Liveness to safety mapping:
             vec<EventCounter>    event_cnts;
 
+            // Options:
+            bool                 fwd_revive;
+
             // Statistics:
             double               cpu_time;
             uint64_t             cls_added;
@@ -76,6 +81,7 @@ namespace Tip {
 
             uint64_t             cands_added;
             uint64_t             cands_fwdsub;
+            uint64_t             cands_revived;
             uint64_t             cands_total_size;
             uint64_t             cands_total_removed;
 
@@ -158,7 +164,11 @@ namespace Tip {
             void             verifyInvariant ();
 
             Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), init(t), prop(t, F), step(t, F), 
+
+                               fwd_revive(opt_fwd_revive),
+
                                cpu_time  (0),
+
                                cls_added (0),
                                cls_moved (0),
                                cls_bwdsub(0),
@@ -168,6 +178,7 @@ namespace Tip {
 
                                cands_added        (0),
                                cands_fwdsub       (0),
+                               cands_revived      (0),
                                cands_total_size   (0),
                                cands_total_removed(0)
 
@@ -837,7 +848,8 @@ namespace Tip {
 
                 unsigned sub_cycle;
                 if (fwdSubsumed(&(const Clause&)*sc, sub_cycle)){
-                    if (sub_cycle != cycle_Undef && sub_cycle+1 < size()){
+                    if (fwd_revive && sub_cycle != cycle_Undef && sub_cycle+1 < size()){
+                        cands_revived++;
                         assert(sub_cycle >= sc->cycle);
                         sc->cycle = sub_cycle+1;
                         enqueueClause(sc); }
@@ -1027,6 +1039,7 @@ namespace Tip {
             printf("Candidate Clauses:\n");
             printf("  Added:             %"PRIu64"\n", cands_added);
             printf("  Forward subsumed:  %"PRIu64"\n", cands_fwdsub);
+            printf("  Revived:           %"PRIu64"\n", cands_revived);
             printf("  Avg. size:         %.1f\n", cands_total_size / (double)cands_added);
             printf("  Total Literals :   %"PRIu64" (%.1f%% deleted)\n", 
                    cands_total_size, cands_total_removed * 100 / (double)(tip.flps.size() * cands_added));
