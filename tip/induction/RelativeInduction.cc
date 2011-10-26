@@ -42,7 +42,8 @@ namespace Tip {
         //===================================================================================================
         // Temporal Relative Induction Prover:
 
-        BoolOption opt_fwd_revive("RIP", "rip-fwd-rev",  "Use revival of forward subsumed clauses", false);
+        BoolOption opt_fwd_revive("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", false);
+        BoolOption opt_bwd_revive("RIP", "rip-bwd-rev",  "Use revival of backward-subsumed clauses", false);
         BoolOption opt_fwd_inst  ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
 
         class Trip {
@@ -70,6 +71,7 @@ namespace Tip {
 
             // Options:
             bool                 fwd_revive;
+            bool                 bwd_revive;
             bool                 fwd_inst;
 
             // Statistics:
@@ -77,6 +79,7 @@ namespace Tip {
             uint64_t             cls_added;
             uint64_t             cls_moved;
             uint64_t             cls_bwdsub;
+            uint64_t             cls_revived;
             uint64_t             cls_total_size;
             uint64_t             cls_total_before;
             uint64_t             cls_total_removed;
@@ -168,6 +171,7 @@ namespace Tip {
             Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), init(t), prop(t, F), step(t, F), 
 
                                fwd_revive(opt_fwd_revive),
+                               bwd_revive(opt_bwd_revive),
                                fwd_inst  (opt_fwd_inst),
 
                                cpu_time  (0),
@@ -175,6 +179,7 @@ namespace Tip {
                                cls_added (0),
                                cls_moved (0),
                                cls_bwdsub(0),
+                               cls_revived(0),
                                cls_total_size(0),
                                cls_total_before(0),
                                cls_total_removed(0),
@@ -687,6 +692,7 @@ namespace Tip {
                         }
                         inv_found = true;
                     }
+                    occ[i]->cycle = c->cycle;
                 }
 
             return inv_found;
@@ -812,27 +818,49 @@ namespace Tip {
             Clause c,d;
             assert(F.size() > 0);
 
-            clearInactive();
+            // clearInactive();
 
 #ifdef VERIFY_SUBSUMPTION
             // Check that no subsumptions were missed.
             verifySubsumption();
 #endif
             
-            for (int i = 0; i < F.size()-1; i++)
-                for (int j = 0; j < F[i].size(); j++)
-                    if (F[i][j]->isActive()){
-                        c = *F[i][j];
+            for (int k = 0; k < F.size()-1; k++){
+                int i,j;
+                for (i = j = 0; i < F[k].size(); i++){
+                    if (bwd_revive && F[k][i]->cycle != cycle_Undef && F[k][i]->cycle > (unsigned)k){
+                        assert(F[k][i]->cycle < size());
+                        assert(!F[k][i]->isActive());
+                        F[F[k][i]->cycle].push(F[k][i]);
+                        continue;
+                    }else
+                        F[k][j++] = F[k][i];
+
+                    if ((F[k][i]->isActive() || (bwd_revive && F[k][i]->cycle != cycle_Undef))){
+                        assert(F[k][i]->cycle == (unsigned)k);
+
+                        c = *F[k][i];
                         c.cycle++;
+
                         if (proveStep(c, d)){
-                            // NOTE: the clause F[i][j] will be removed by backward subsumption.
-                            cls_moved++;
-                            cls_bwdsub--; // Don't count this as a new clause.
-                            cls_added--;
+                            // NOTE: the clause F[c][i] will be removed by backward subsumption.
+                            if (!c.isActive()){
+                                cls_revived++;
+                            }else{
+                                cls_moved++;
+                                cls_bwdsub--; // Don't count this as a new clause.
+                                cls_added--;
+                            }
+
                             if (addClause(d))
                                 extractInvariant();
                         }
                     }
+                }
+                F[k].shrink(i - j);
+            }
+
+            clearInactive();
         }
 
 
@@ -1033,6 +1061,7 @@ namespace Tip {
             printf("  Added:             %"PRIu64"\n", cls_added);
             printf("  Backward subsumed: %"PRIu64"\n", cls_bwdsub);
             printf("  Moved:             %"PRIu64"\n", cls_moved);
+            printf("  Revived:           %"PRIu64"\n", cls_revived);
             printf("  Avg. size:         %.1f\n", cls_total_size / (double)cls_added);
             printf("  Total Literals :   %"PRIu64" (%.1f%% deleted)\n", 
                    cls_total_size, cls_total_removed * 100 / (double)cls_total_before);
