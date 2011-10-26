@@ -600,6 +600,8 @@ namespace Tip {
                                 c = *F[j][k];
                                 c.cycle = cycle_Undef;
                                 addClause(c);
+                                cls_bwdsub--; // Don't count this as a new clause.
+                                cls_added--;
                                 inv_size++;
                             }
                     if (tip.verbosity >= 3)
