@@ -42,7 +42,8 @@ namespace Tip {
         //===================================================================================================
         // Temporal Relative Induction Prover:
 
-        BoolOption opt_fwd_revive("RIP", "rip-fwd-rev", "Use revival of forward subsumed clauses.", false);
+        BoolOption opt_fwd_revive("RIP", "rip-fwd-rev",  "Use revival of forward subsumed clauses", false);
+        BoolOption opt_fwd_inst  ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
 
         class Trip {
             TipCirc&             tip;
@@ -69,6 +70,7 @@ namespace Tip {
 
             // Options:
             bool                 fwd_revive;
+            bool                 fwd_inst;
 
             // Statistics:
             double               cpu_time;
@@ -166,6 +168,7 @@ namespace Tip {
             Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), init(t), prop(t, F), step(t, F), 
 
                                fwd_revive(opt_fwd_revive),
+                               fwd_inst  (opt_fwd_inst),
 
                                cpu_time  (0),
 
@@ -863,16 +866,14 @@ namespace Tip {
 
                 if (proveAndGeneralize(sc, minimized, pred)){
                     if ((iters++ % 10) == 0) printStats(sc->cycle, false);
-                    // TODO: plug memory leak of scheduled clauses if invariant is found.
+
                     cls_total_size    += minimized.size();
                     cls_total_before  += sc->size();
                     cls_total_removed += sc->size() - minimized.size();
-
+                    
                     if (addClause(minimized)){
-                        // FIXME: reference counting?
-                        // delete sc;
                         extractInvariant();
-                    }else if (minimized.cycle != cycle_Undef && minimized.cycle+1 < size()){
+                    }else if (fwd_inst && minimized.cycle != cycle_Undef && minimized.cycle+1 < size()){
                         sc->cycle = minimized.cycle+1;
                         enqueueClause(sc);
                     }
