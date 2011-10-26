@@ -44,7 +44,8 @@ void embedConstraints(TipCirc &tip)
     
         // add the flop as a fairness property (!)
         // TODO: investigate if we should bake the constraint into the justify signals directly
-        tip.fairs.push(constr);
+        if ( tip.live_props.size() > 0 )
+            tip.fairs.push(constr);
     }
 }
 
