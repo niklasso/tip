@@ -1,5 +1,5 @@
 /*****************************************************************************************[Embed.h]
-Copyright (c) 2011, Niklas Sorensson
+Copyright (c) 2011, Niklas Sorensson, Koen Claessen
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -19,11 +19,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Tip_Embed_h
 #define Tip_Embed_h
 
-// INCLUDES
+#include "tip/TipCirc.h"
 
 namespace Tip {
 
-// BODY
+void embedConstraints(TipCirc &tip);
 
 //=================================================================================================
 } // namespace Tip
