@@ -26,7 +26,7 @@ namespace Tip {
 //=================================================================================================
 // Fairness embedding:
 
-void embedFairness(TipCirc& tip);
+void embedFairness(TipCirc& tip, bool stableLive);
 
 //=================================================================================================
 } // namespace Tip

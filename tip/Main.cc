@@ -52,6 +52,7 @@ int main(int argc, char** argv)
     IntOption depth("MAIN", "k",    "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
     IntOption safe ("MAIN", "safe", "Which safety property to work on.", -1, IntRange(-1,INT32_MAX));
     IntOption live ("MAIN", "live", "Which liveness property to work on.", -1, IntRange(-1,INT32_MAX));
+    BoolOption stableLive("MAIN", "stableLive", "Use stable liveness signal coding.", false);
     IntOption kind ("MAIN", "kind", "What kind of algorithm to run.", 0, IntRange(0,INT32_MAX));
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
@@ -108,7 +109,7 @@ int main(int argc, char** argv)
         extractSafety(tc);
 
     // Embed fairness constraints and merge "justice" signals:
-    embedFairness(tc);
+    embedFairness(tc,stableLive);
     tc.stats();
 
     // Select one safety or liveness property:
