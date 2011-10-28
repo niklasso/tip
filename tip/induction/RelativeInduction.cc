@@ -45,6 +45,7 @@ namespace Tip {
         BoolOption opt_fwd_revive("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", false);
         BoolOption opt_bwd_revive("RIP", "rip-bwd-rev",  "Use revival of backward-subsumed clauses", false);
         BoolOption opt_fwd_inst  ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
+        BoolOption opt_order_heur("RIP", "rip-order",    "Use generalization order heuristic", false);
 
         class Trip {
             TipCirc&             tip;
@@ -55,6 +56,7 @@ namespace Tip {
             vec<Clause*>         F_inv;         // Invariant clauses.
             unsigned             n_inv;         // Number of active invariants.
             unsigned             n_total;       // Total number of active clauses.
+            GMap<int>            num_occ;       // Number of clause occurences for each gate.
 
             vec<vec<SharedRef<ScheduledClause> > >
                                  clause_queue;
@@ -73,6 +75,7 @@ namespace Tip {
             bool                 fwd_revive;
             bool                 bwd_revive;
             bool                 fwd_inst;
+            bool                 order_heur;
 
             // Statistics:
             double               cpu_time;
@@ -99,6 +102,8 @@ namespace Tip {
             // RETURNS: True and a stronger clause d (subset of c) that holds in some cycle >= k,
             //       or False if c does not hold in cycle k.
             bool             proveStep(const Clause& c, Clause& yes);
+
+            void             scheduleGeneralizeOrder(const Clause& c, vec<Sig>& try_remove);
 
             // Find a maximal generalization of c that still is subsumed by init.
             void             generalize(Clause& c);
@@ -168,11 +173,12 @@ namespace Tip {
             void             printInvariant  ();
             void             verifyInvariant ();
 
-            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), init(t), prop(t, F), step(t, F), 
+            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), init(t), prop(t, F), step(t, F), 
 
                                fwd_revive(opt_fwd_revive),
                                bwd_revive(opt_bwd_revive),
                                fwd_inst  (opt_fwd_inst),
+                               order_heur(opt_order_heur),
 
                                cpu_time  (0),
 
@@ -225,17 +231,40 @@ namespace Tip {
             void printFinalStats();
         };
 
+        class SigCmp {
+            const GMap<int>& num_occ;
+        public:            
+            SigCmp(const GMap<int>& num_occ_) : num_occ(num_occ_){}
+
+            bool operator()(Sig x, Sig y) const { 
+                assert(num_occ.has(gate(x)));
+                assert(num_occ.has(gate(y)));
+                int num_x = num_occ[gate(x)];
+                int num_y = num_occ[gate(y)];
+                //return num_x < num_y || (num_x == num_y && x < y); }
+                return num_x < num_y; }
+        };
+
+        void Trip::scheduleGeneralizeOrder(const Clause& c, vec<Sig>& try_remove)
+        {
+            for (unsigned i = 0; i < c.size(); i++)
+                try_remove.push(c[i]);
+            if (order_heur)
+                sort(try_remove, SigCmp(num_occ));
+        }
+
         void Trip::generalize(Clause& c)
         {
-            Clause try_remove = c;
-            Clause d          = c;
-            Clause e;
+            vec<Sig> try_remove;
+            Clause   d = c;
+            Clause   e;
+            scheduleGeneralizeOrder(c, try_remove);
 
             if (tip.verbosity >= 4){
                 printf("[generalize] begin d = ");
                 printClause(d);
                 printf("\n"); }
-            for (unsigned i = 0; d.size() > 1 && i < try_remove.size(); i++)
+            for (int i = 0; d.size() > 1 && i < try_remove.size(); i++)
                 if (find(d, try_remove[i])){
                     Clause cand = d - try_remove[i];
                     if (tip.verbosity >= 4){
@@ -264,16 +293,17 @@ namespace Tip {
         void Trip::generalizeInit(Clause& c)
         {
             assert(c.cycle == 0);
-            Clause try_remove = c;
-            Clause d          = c;
-            Clause empty;
+            vec<Sig> try_remove;
+            Clause   d = c;
+            Clause   empty;
+            scheduleGeneralizeOrder(c, try_remove);
 
             if (tip.verbosity >= 4){
                 printf("[generalizeInit] begin d = ");
                 printClause(d);
                 printf("\n"); }
 
-            for (unsigned i = 0; d.size() > 1 && i < try_remove.size(); i++)
+            for (int i = 0; d.size() > 1 && i < try_remove.size(); i++)
                 if (find(d, try_remove[i])){
                     Clause cand = d - try_remove[i];
                     if (tip.verbosity >= 4){
@@ -431,6 +461,8 @@ namespace Tip {
 
             event_cnts[p].x = flp;
             event_cnts[p].k++;
+
+            num_occ.growTo(tip.main.lastGate(), 0);
         }
 
 
@@ -514,6 +546,12 @@ namespace Tip {
             n_total--;
             step.resetCycle(c->cycle, F_size[c->cycle]);
 
+            // Decrease occurrence counts:
+            for (unsigned i = 0; i < c->size(); i++){
+                num_occ[gate((*c)[i])]--;
+                assert(num_occ[gate((*c)[i])] >= 0);
+            }
+
             // While removing from the last cycle, the set can not become empty:
             assert(c->cycle < (unsigned)size());
 
@@ -558,6 +596,10 @@ namespace Tip {
             assert(!fwdSubsumed(&c_));
             n_total++;
             cls_added++;
+
+            // Increase occurrence counts:
+            for (unsigned i = 0; i < c.size(); i++)
+                num_occ[gate(c[i])]++;
 
             // printf("[addClause] c = ");
             // printClause(c);
