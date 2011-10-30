@@ -446,6 +446,8 @@ namespace Tip {
             prop.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
             step.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
 
+            num_occ.growTo(tip.main.lastGate(), 0);
+
             // Add that the new target can not be falsified up to the current cycle:
             vec<Sig> cls;
             cls.push(~flp);
@@ -461,8 +463,6 @@ namespace Tip {
 
             event_cnts[p].x = flp;
             event_cnts[p].k++;
-
-            num_occ.growTo(tip.main.lastGate(), 0);
         }
 
 
@@ -548,6 +548,7 @@ namespace Tip {
 
             // Decrease occurrence counts:
             for (unsigned i = 0; i < c->size(); i++){
+                assert(num_occ.has(gate((*c)[i])));
                 num_occ[gate((*c)[i])]--;
                 assert(num_occ[gate((*c)[i])] >= 0);
             }
