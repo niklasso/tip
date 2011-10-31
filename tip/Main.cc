@@ -63,6 +63,7 @@ int main(int argc, char** argv)
     BoolOption xsafe("MAIN", "xsafe", "Extract extra safety properties.", false);
     StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
     IntOption rip_bmc("RIP", "rip-bmc", "Bmc-mode to use in Rip-engine (-1=auto, 0=none, 1=safe, 2=live).", -1);
+    StringOption aiger("MAIN", "aiger", "Temporary AIGER writing.", NULL);
 
     parseOptions(argc, argv, true);
 
@@ -124,6 +125,11 @@ int main(int argc, char** argv)
     if (coif){
         removeUnusedLogic(tc);
         tc.stats(); }
+
+    if (aiger != NULL){
+        tc.writeAiger(aiger);
+        exit(0); }
+
 
     if (td_depth != -1)
         temporalDecompositionSmart(tc, td_depth);

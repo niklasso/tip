@@ -81,6 +81,16 @@ namespace Tip {
 #endif
     }
 
+
+    void TipCirc::writeAiger(const char* file) const
+    {
+        vec<Sig> outs;
+        for (SafeProp p = 0; p < safe_props.size(); p++)
+            outs.push(~safe_props[p].sig);
+        ::writeAiger(file, *this, outs);
+    }
+
+
     void TipCirc::bmc(uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver){
         if (bver == bmc_Basic)
             basicBmc(*this, begin_cycle, stop_cycle);
