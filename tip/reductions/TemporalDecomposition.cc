@@ -224,8 +224,8 @@ namespace Tip {
                     
                     stateEquivs(tip, states[c], eqs);
                     
-                    // printf("state %d: ", c);
-                    // printState(states[c]);
+                    // printf("%d: ", i);
+                    // printState(states[i]);
                     // printf("\n");
                     // 
                     // printf("equivs %d: ", c);
@@ -257,12 +257,13 @@ namespace Tip {
                     printEquivs(eqs);
                     printf("\n");
                     
-                    for (unsigned j = 0; j < c; j++)
-                        if (equivsHolds(tip, states[j], eqs)){
-                            c = j;
-                            printf("[detectEquivalentFlops] equivs holds at an earlier time point: %d\n", c);
-                            break;
-                        }
+                    unsigned j = c;
+                    while (j > 0 && equivsHolds(tip, states[j-1], eqs))
+                        j--;
+                    if (j < c){
+                        c = j;
+                        printf("[detectEquivalentFlops] equivs holds at an earlier time point: %d\n", c);
+                    }
 
                     // TODO: make a parameter of this constant.
                     while (c > 32){
