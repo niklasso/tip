@@ -66,7 +66,7 @@ namespace Tip {
         };
 
 
-        void simulateInit(TipCirc& tip, vec<lbool>& out)
+        void simulateInit(const TipCirc& tip, vec<lbool>& out)
         {
             GMap<lbool> val(tip.init.lastGate(), l_Undef);
             for (GateIt git = tip.init.begin0(); git != tip.init.end(); ++git)
@@ -86,7 +86,7 @@ namespace Tip {
         }
 
 
-        void simulateStep(TipCirc& tip, const vec<lbool>& prev, vec<lbool>& out)
+        void simulateStep(const TipCirc& tip, const vec<lbool>& prev, vec<lbool>& out)
         {
             assert(prev.size() == tip.flps.size());
             GMap<lbool> val(tip.main.lastGate(), l_Undef);
@@ -197,7 +197,7 @@ namespace Tip {
         };
 
 
-        void detectEquivalentFlops(TipCirc& tip, Equivs& eqs, unsigned& cycle)
+        void detectEquivalentFlops(const TipCirc& tip, unsigned max_cycle, Equivs& eqs, unsigned& cycle)
         {
             vec<vec<lbool> > states;
             states.push();
@@ -266,7 +266,7 @@ namespace Tip {
                     }
 
                     // TODO: make a parameter of this constant.
-                    while (c > 32){
+                    while (c > max_cycle){
                         Equivs curr;
                         stateEquivs(tip, states[--c], curr);
                         Equivs inters;
@@ -295,12 +295,12 @@ namespace Tip {
 
 
 
-void temporalDecompositionSmart(TipCirc& tip, unsigned min_cycles)
+void temporalDecompositionSmart(TipCirc& tip, unsigned min_cycles, unsigned max_cycles)
 {
     Equivs   eqs;
     unsigned cycle = 0;
 
-    detectEquivalentFlops(tip, eqs, cycle);
+    detectEquivalentFlops(tip, max_cycles, eqs, cycle);
 
     if (eqs.size() > 0 || min_cycles > 0){
         if (min_cycles > cycle)

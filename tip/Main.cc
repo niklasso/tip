@@ -60,6 +60,7 @@ int main(int argc, char** argv)
     BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
     BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
     IntOption td   ("MAIN", "td",   "Use temporal decomposition (-2=auto, -1=none, otherwise minimum unrolling).", -2, IntRange(-1, INT32_MAX));
+    IntOption tdmax("MAIN", "tdmax","Max cycles for temporal decomposition.", 32, IntRange(0, INT32_MAX));
     BoolOption xsafe("MAIN", "xsafe", "Extract extra safety properties.", false);
     StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
     IntOption rip_bmc("RIP", "rip-bmc", "Bmc-mode to use in Rip-engine (-1=auto, 0=none, 1=safe, 2=live).", -1);
@@ -132,7 +133,7 @@ int main(int argc, char** argv)
 
 
     if (td_depth != -1)
-        temporalDecompositionSmart(tc, td_depth);
+        temporalDecompositionSmart(tc, td_depth, tdmax);
 
     if (sce > 0){
         tc.sce(sce == 1, false);

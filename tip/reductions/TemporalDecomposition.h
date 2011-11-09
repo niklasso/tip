@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 namespace Tip {
 
 void temporalDecomposition     (TipCirc& tip, unsigned cycles);
-void temporalDecompositionSmart(TipCirc& tip, unsigned cycles = 0);
+void temporalDecompositionSmart(TipCirc& tip, unsigned min_cycles = 0, unsigned max_cycles = UINT32_MAX);
 
 //=================================================================================================
 } // namespace Tip
