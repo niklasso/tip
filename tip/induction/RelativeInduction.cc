@@ -366,7 +366,8 @@ namespace Tip {
             }
 
 #ifndef GENERALIZE_THEN_PUSH
-            generalize(yes_step);
+            if (yes_step.cycle > 0)
+                generalize(yes_step);
 #endif
 
             yes = yes_step;
