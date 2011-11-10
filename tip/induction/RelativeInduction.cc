@@ -594,6 +594,10 @@ namespace Tip {
             Clause& c = cycle != cycle_Undef ? *F[cycle].last() : *F_inv.last();
             assert(c.size() > 0);
 
+             // printf("[addClause] c = ");
+             // printClause(c);
+             // printf("\n");
+
             assert(!fwdSubsumed(&c_));
             n_total++;
             cls_added++;
@@ -601,10 +605,6 @@ namespace Tip {
             // Increase occurrence counts:
             for (unsigned i = 0; i < c.size(); i++)
                 num_occ[gate(c[i])]++;
-
-            // printf("[addClause] c = ");
-            // printClause(c);
-            // printf("\n");
 
             prop.addClause(c);
             step.addClause(c);
@@ -669,6 +669,8 @@ namespace Tip {
         // PRECONDITION: (incomplete?) 'c' must not already exist in the forward subsumption index.
         bool Trip::fwdSubsumed(const Clause* c, unsigned& cycle)
         {
+            unsigned max_subsume_cycle = 0;
+            bool     is_subsumed       = false;
             for (unsigned i = 0; i < c->size(); i++){
                 Sig x = (*c)[i];
                 if (!fwd_occurs.has(x))
@@ -677,11 +679,14 @@ namespace Tip {
                 for (int j = 0; j < fwd_occurs[x].size(); j++)
                     if (fwd_occurs[x][j]->isActive() && subsumes(*fwd_occurs[x][j], *c)){
                         cands_fwdsub++;
-                        cycle = fwd_occurs[x][j]->cycle;
-                        return true;
+                        if (max_subsume_cycle < fwd_occurs[x][j]->cycle)
+                            max_subsume_cycle = fwd_occurs[x][j]->cycle;
+                        is_subsumed = true;
                     }
             }
-            return false;
+            if (is_subsumed)
+                cycle = max_subsume_cycle;
+            return is_subsumed;
         }
 
 
@@ -870,12 +875,20 @@ namespace Tip {
             
             for (int k = 0; k < F.size()-1; k++){
                 int i,j;
+                unsigned cycle;
                 for (i = j = 0; i < F[k].size(); i++){
-                    if (bwd_revive && F[k][i]->cycle != cycle_Undef && F[k][i]->cycle > (unsigned)k){
-                        assert(F[k][i]->cycle < size());
-                        assert(!F[k][i]->isActive());
-                        F[F[k][i]->cycle].push(F[k][i]);
-                        continue;
+                    if (bwd_revive && !F[k][i]->isActive()){
+                        cycle = F[k][i]->cycle;
+
+                        if (cycle == (unsigned)k){
+                            fwdSubsumed(F[k][i], cycle);
+                            F[k][i]->cycle = cycle;
+                        }
+
+                        if (cycle != cycle_Undef && cycle > (unsigned)k){
+                            F[cycle].push(F[k][i]);
+                            continue;
+                        }
                     }else
                         F[k][j++] = F[k][i];
 
