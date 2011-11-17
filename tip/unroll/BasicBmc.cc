@@ -223,6 +223,7 @@ void BasicBmc::decideCycle()
                 for (int l = 0; l < ui[k].size(); l++)
                     frames.last().push(cl.modelValue(ui[k][l]));
             }
+            tip.adaptTrace(frames);
             tip.live_props[p].stat = pstat_Falsified;
             tip.live_props[p].cex  = cex;
         }else
