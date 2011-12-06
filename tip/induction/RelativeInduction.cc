@@ -33,6 +33,22 @@ namespace Tip {
 
     namespace {
 
+        // Helper to calculate the "Luby" sequence for restart intervals:
+        double luby(double y, int x){
+            // Find the finite subsequence that contains index 'x', and the
+            // size of that subsequence:
+            int size, seq;
+            for (size = 1, seq = 0; size < x+1; seq++, size = 2*size+1);
+            
+            while (size-1 != x){
+                size = (size-1)>>1;
+                seq--;
+                x = x % size;
+            }
+            
+            return pow(y, seq);
+        }
+
         struct EventCounter {
             unsigned k;
             Sig      x;
@@ -42,10 +58,12 @@ namespace Tip {
         //===================================================================================================
         // Temporal Relative Induction Prover:
 
-        BoolOption opt_fwd_revive("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", false);
-        BoolOption opt_bwd_revive("RIP", "rip-bwd-rev",  "Use revival of backward-subsumed clauses", false);
-        BoolOption opt_fwd_inst  ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
-        BoolOption opt_order_heur("RIP", "rip-order",    "Use generalization order heuristic", false);
+        BoolOption opt_fwd_revive  ("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", false);
+        BoolOption opt_bwd_revive  ("RIP", "rip-bwd-rev",  "Use revival of backward-subsumed clauses", false);
+        BoolOption opt_fwd_inst    ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
+        BoolOption opt_order_heur  ("RIP", "rip-order",    "Use generalization order heuristic", false);
+        IntOption  opt_restart     ("RIP", "rip-restart",  "Use this interval for rip-engine restarts (0=off)", 0);
+        BoolOption opt_restart_luby("RIP", "rip-restart-luby", "Use luby sequence for rip-engine restarts", false);
 
         class Trip {
             TipCirc&             tip;
@@ -57,6 +75,8 @@ namespace Tip {
             unsigned             n_inv;         // Number of active invariants.
             unsigned             n_total;       // Total number of active clauses.
             GMap<int>            num_occ;       // Number of clause occurences for each gate.
+            uint32_t             luby_index;    // Luby sequence index.
+            uint32_t             restart_cnt;   // Restart bound counter.
 
             vec<vec<SharedRef<ScheduledClause> > >
                                  clause_queue;
@@ -76,6 +96,8 @@ namespace Tip {
             bool                 bwd_revive;
             bool                 fwd_inst;
             bool                 order_heur;
+            uint32_t             restart_ival;
+            bool                 restart_luby;
 
             // Statistics:
             double               cpu_time;
@@ -173,12 +195,14 @@ namespace Tip {
             void             printInvariant  ();
             void             verifyInvariant ();
 
-            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), init(t), prop(t, F), step(t, F), 
+            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), init(t), prop(t, F), step(t, F), 
 
-                               fwd_revive(opt_fwd_revive),
-                               bwd_revive(opt_bwd_revive),
-                               fwd_inst  (opt_fwd_inst),
-                               order_heur(opt_order_heur),
+                               fwd_revive  (opt_fwd_revive),
+                               bwd_revive  (opt_bwd_revive),
+                               fwd_inst    (opt_fwd_inst),
+                               order_heur  (opt_order_heur),
+                               restart_ival(opt_restart),
+                               restart_luby(opt_restart_luby),
 
                                cpu_time  (0),
 
@@ -929,6 +953,8 @@ namespace Tip {
 
         bool Trip::proveRec(SharedRef<ScheduledClause> sc, SharedRef<ScheduledClause>& pred)
         {
+            uint32_t bound = (restart_luby ? luby(2, luby_index) : 1) * restart_ival;
+
             enqueueClause(sc);
             for (;;){
                 SharedRef<ScheduledClause> sc = getMinClause();
@@ -955,6 +981,17 @@ namespace Tip {
                     cls_total_size    += minimized.size();
                     cls_total_before  += sc->size();
                     cls_total_removed += sc->size() - minimized.size();
+
+                    if (bound > 0)
+                        // Handle restarts:
+                        if (restart_cnt == bound){
+                            // printf("[proveRec] restart (bound = %d)\n", bound);
+                            luby_index++;
+                            restart_cnt = 0;
+                            clause_queue.clear();
+                            return true;
+                        }else
+                            restart_cnt++;
                     
                     if (addClause(minimized)){
                         extractInvariant();
@@ -968,7 +1005,7 @@ namespace Tip {
                     cands_added++;
                     cands_total_size    += pred->size();
                     cands_total_removed += tip.flps.size() - pred->size();
-
+                    
                     enqueueClause(pred);
                     enqueueClause(sc);
                 }
