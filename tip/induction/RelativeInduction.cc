@@ -1011,6 +1011,10 @@ namespace Tip {
                 }
             }
 
+            if (!restart_luby)
+                // If we are using constant restarts, reset the restart counter:
+                restart_cnt = 0;
+
             return true;
         }
 
