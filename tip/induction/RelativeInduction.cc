@@ -1073,7 +1073,7 @@ namespace Tip {
                             cands_total_removed += tip.flps.size() - pred->size();
                             if (!proveRec(pred, start)){
                                 // 'p' was falsified.
-                                // printf("[decideCycle] event counter for liveness property %d reached %d\n", p, event_cnts[p].k);
+                                printf("[decideCycle] event counter for liveness property %d reached %d\n", p, event_cnts[p].k);
 
                                 // vec<vec<lbool> > frames;
                                 // extractTrace(start, frames);
@@ -1087,7 +1087,7 @@ namespace Tip {
                         }else if (prop_res == l_True){
                             // 'p' is implied by the invariants.
                             tip.live_props[p].stat = pstat_Proved;
-                            printf("[decideCycle] liveness property %d was proved!\n", p);
+                            printf("[decideCycle] liveness property %d was proved with k=%d!\n", p, event_cnts[p].k);
                         }else if (prop_res == l_Undef){
                             // Done with 'p' for this cycle:
                             unresolved++;
