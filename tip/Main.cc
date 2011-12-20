@@ -21,6 +21,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "minisat/utils/System.h"
 #include "tip/TipCirc.h"
 #include "tip/constraints/Embed.h"
+#include "tip/constraints/Extract.h"
 #include "tip/liveness/EmbedFairness.h"
 #include "tip/liveness/Liveness.h"
 #include "tip/reductions/RemoveUnused.h"
@@ -57,6 +58,7 @@ int main(int argc, char** argv)
     IntOption kind ("MAIN", "kind", "What kind of algorithm to run.", 0, IntRange(0,INT32_MAX));
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
+    IntOption fce  ("MAIN", "fce",  "Fairness constraint extraction level (0=off).", 0);
     BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
     BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
     IntOption td   ("MAIN", "td",   "Use temporal decomposition (-2=auto, -1=none, otherwise minimum unrolling).", -2, IntRange(-1, INT32_MAX));
@@ -107,17 +109,6 @@ int main(int argc, char** argv)
             td_depth = 2;
     }
 
-    // Extract extra safety properties
-    if (xsafe)
-        extractSafety(tc);
-
-    if (embed)
-        embedConstraints(tc);
-
-    // Embed fairness constraints and merge "justice" signals:
-    embedFairness(tc);
-    tc.stats();
-
     // Select one safety or liveness property:
     if (safe >= 0) tc.selSafe(safe);
     if (live >= 0) tc.selLive(live);
@@ -127,13 +118,15 @@ int main(int argc, char** argv)
         removeUnusedLogic(tc);
         tc.stats(); }
 
-    if (aiger != NULL){
-        tc.writeAiger(aiger);
-        exit(0); }
-
+    // Extract extra safety properties
+    if (xsafe)
+        extractSafety(tc);
 
     if (td_depth != -1)
         temporalDecompositionSmart(tc, td_depth, tdmax);
+
+    if (fce)
+        fairnessConstraintExtraction(tc, fce);
 
     if (sce > 0){
         tc.sce(sce == 1, false);
@@ -143,6 +136,18 @@ int main(int argc, char** argv)
         removeUnusedLogic(tc);
         tc.stats();
     }
+
+    // Embed fairness constraints and merge "justice" signals:
+    embedFairness(tc);
+    tc.stats();
+
+    if (embed)
+        embedConstraints(tc);
+
+    // TODO: is there a better place in the ordering for this?
+    if (aiger != NULL){
+        tc.writeAiger(aiger);
+        exit(0); }
 
     if (strcmp(alg, "bmc") == 0)
         tc.bmc(0,depth, (TipCirc::BmcVersion)(int)bver);

@@ -389,6 +389,188 @@ void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands)
 }
 
 
+
+void refineCandsMonotonic(TipCirc& tip, int level)
+{
+    vec<Gate> gates;
+    for (GateIt git = tip.main.begin(); git != tip.main.end(); ++git)
+        gates.push(*git);
+
+    for ( LiveProp p = 0; p < tip.live_props.size(); p++ )
+      if ( tip.live_props[p].stat == pstat_Unknown ) {
+        Circ               uc;
+        vec<IFrame>        ui;           // Unused here.
+        UnrollCirc         unroller(tip, ui, uc, false);
+        GMap<Sig>          umap0;
+        GMap<Sig>          umap1;
+        Solver             s;
+        Clausifyer<Solver> cl(uc, s);
+
+        printf("=== Liveness property %d:\n", p);
+
+        unroller(umap0);
+        unroller(umap1);
+
+        // setting constraints
+        for (unsigned int i = 0; i < tip.cnstrs.size(); i++) {
+            Lit rep0 = cl.clausify(umap0[gate(tip.cnstrs[i][0])]^sign(tip.cnstrs[i][0]));
+            Lit rep1 = cl.clausify(umap1[gate(tip.cnstrs[i][0])]^sign(tip.cnstrs[i][0]));
+            for (int j = 1; j < tip.cnstrs[i].size(); j++) {
+              cl.clausifyAs(umap0[gate(tip.cnstrs[i][j])]^sign(tip.cnstrs[i][j]),rep0);
+              cl.clausifyAs(umap1[gate(tip.cnstrs[i][j])]^sign(tip.cnstrs[i][j]),rep1);
+            }
+        }
+
+        vec<Gate> cands;
+        gates.copyTo(cands);
+        //for (int i = 0; i < tip.flps.size(); i++)
+        //    cands.push(tip.flps[i]);
+
+        // computing all justice signals (in umap0)
+        vec<Lit> justs;
+        for ( int i = 0; i < tip.fairs.size(); i++ ) {
+            Sig j = tip.fairs[i];
+            justs.push(cl.clausify(umap0[gate(j)]^sign(j)));
+            if (level >= 3) justs.push(cl.clausify(umap1[gate(j)]^sign(j)));
+        }
+        for ( int i = 0; i < tip.live_props[p].sigs.size(); i++ ) {
+            Sig j = tip.live_props[p].sigs[i];
+            justs.push(cl.clausify(umap0[gate(j)]^sign(j)));
+            if (level >= 3) justs.push(cl.clausify(umap1[gate(j)]^sign(j)));
+        }
+        printf("found %d justice signals\n", justs.size());
+
+        // trying to show implications
+        vec<Sig> monos;
+        vec<Sig> trues;
+        while ( 1 ) {
+            int n = monos.size() + trues.size();
+      
+            // trying out all candidates 
+            for ( int i = 0; i < cands.size(); i++ ) {
+                Lit x0 = cl.clausify(umap0[cands[i]]);
+                Lit x1 = cl.clausify(umap1[cands[i]]);
+          
+                // monotonic?
+                if (!s.solve(x0,~x1) || !s.solve(~x0,x1)) {
+                    // setting x as stable (both ways!)
+                    s.addClause(~x0,x1);
+                    s.addClause(~x1,x0);
+                    monos.push(mkSig(cands[i]));
+
+                    // checking compatability with justice signals
+                    for ( int j = 0; j < justs.size(); j++ ) {
+                        if (!s.solve(justs[j],x0)) {
+                            //printf("monotonic signal x incompatible with just; setting to 0.\n");
+                            s.addClause(~x0);
+                            monos.pop();
+                            trues.push(~mkSig(cands[i]));
+                            break;
+                        }
+                        else if (!s.solve(justs[j],~x0)) {
+                            //printf("monotonic signal x incompatible with just; setting to 1.\n");
+                            s.addClause(x0);
+                            monos.pop();
+                            trues.push(mkSig(cands[i]));
+                            break;
+                        }
+                    }
+
+                    // remove from candidates
+                    cands[i] = cands.last();
+                    cands.pop();
+                    i--;
+                }
+            }
+
+            if ( monos.size() + trues.size() <= n )
+              break;
+
+            printf("found %d monotonic signals, %d constant signals...\n", monos.size(), trues.size());
+        }
+
+        printf("monotonic signals (%d): ", monos.size());
+        printSigs(monos);
+        printf("\n");
+        printf("true signals (%d): ", trues.size());
+        printSigs(trues);
+        printf("\n");
+
+        // adding these to the just signals
+        printf("adding circuitry...\n");
+
+        // computing stable signal, only on flops for now
+        Sig stable = sig_True;
+        int k = 0;
+        for ( int i = 0; i < trues.size(); i++ ) {
+            Sig x0 = trues[i];
+            stable = tip.main.mkAnd(stable, x0);
+            k++;
+        }
+
+        if (level <= 1){
+            // Keep only trues + monotonic flops.
+            for ( int i = 0; i < tip.flps.size(); i++ ) {
+                Sig x0 = mkSig(tip.flps[i]);
+                Sig x1 = tip.flps.next(gate(x0));
+                
+                for ( int j = 0; j < monos.size(); j++ ) {
+                    if ( x0 == monos[j] || x0 == ~monos[j] ) {
+                        stable = tip.main.mkAnd(stable, ~tip.main.mkXor(x0,x1));
+                        k++;
+                    }
+                }
+            }
+        }else{
+            // Keep all and add flops when necessary (Can be improved).
+            for (int i = 0; i < monos.size(); i++)
+                if (tip.flps.isFlop(gate(monos[i]))){
+                    Sig x0 = mkSig(gate(monos[i]));
+                    Sig x1 = tip.flps.next(gate(x0));
+                    stable = tip.main.mkAnd(stable, ~tip.main.mkXor(x0,x1));
+                    k++;
+                }else{
+                    Sig x0 = tip.main.mkInp();
+                    Sig x1 = mkSig(gate(monos[i]));
+                    tip.flps.define(gate(x0), x1, tip.init.mkInp());
+                    stable = tip.main.mkAnd(stable, ~tip.main.mkXor(x0,x1));
+                    k++;
+                }
+        }
+
+        printf("created stable signal with %d conjuncts.\n", k);
+  
+        if ( k > 0 ) {
+            // computing fairness signal
+            Sig chal  = tip.main.mkInp();
+            Sig check = tip.main.mkInp();
+            Sig ok    = tip.main.mkInp();
+  
+            Sig check_ = tip.main.mkOr(check, chal);
+            Sig ok_    = tip.main.mkAnd(ok, tip.main.mkOr(~check_, stable));
+
+            tip.flps.define(gate(check),check_);
+            tip.flps.define(gate(ok),ok_,sig_True);
+
+            Sig out = tip.main.mkAnd(ok, tip.main.mkAnd(check_, stable));
+            if (tip.live_props[p].sigs.size() >= 1)
+#if 1
+                tip.live_props[p].sigs[0] = tip.main.mkAnd(tip.live_props[p].sigs[0], out);
+#else
+                // NOTE: maybe helps constraint extraction to pick up
+                // the subset of "monos" that really are constraints?
+                for (int i = 0; i < tip.live_props[p].sigs.size(); i++)
+                    tip.live_props[p].sigs[i] = tip.main.mkAnd(tip.live_props[p].sigs[i], out);
+#endif
+            else
+                tip.live_props[p].sigs.push(out);
+      
+            printf("created new fairness constraint based on monotonic signals.\n");
+        }
+    }
+}
+
+
 }
 
 
@@ -423,6 +605,14 @@ void semanticConstraintExtraction(TipCirc& tip, bool use_minimize_alg, bool only
 
     if (tip.verbosity >= 2)
         printf(" [semanticConstraintExtraction] CPU-time: %6.2f\n", cpuTime() - time_before);
+}
+
+
+void fairnessConstraintExtraction(TipCirc& tip, int level)
+{
+    printf("\n*** Extracting monotonic signals...\n\n");
+    refineCandsMonotonic(tip, level);
+    printf("\n*** Done monotonic signals!\n\n");
 }
 
 
