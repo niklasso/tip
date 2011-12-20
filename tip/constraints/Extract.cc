@@ -111,10 +111,10 @@ bool initializeCands(const TipCirc& tip, Solver& s, Clausifyer& cl, vec<Sig>& ca
         if (tip.safe_props[p].stat == pstat_Unknown)
             some_bad.push(~cl.clausify(tip.safe_props[p].sig));
     for (LiveProp p = 0; p < tip.live_props.size(); p++)
-        if (tip.live_props[p].stat == pstat_Unknown){
-            assert(tip.live_props[p].sigs.size() == 1);
-            some_bad.push(cl.clausify(tip.live_props[p].sigs[0]));
-        }
+        if (tip.live_props[p].stat == pstat_Unknown)
+            // NOTE: this is sound but weaker than what is possible.
+            for (int i = 0; i < tip.live_props[p].sigs.size(); i++)
+                some_bad.push(cl.clausify(tip.live_props[p].sigs[i]));
     s.addClause(some_bad);
     
     if (!s.solve()) return false;
