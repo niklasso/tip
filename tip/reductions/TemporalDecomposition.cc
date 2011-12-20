@@ -19,6 +19,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "minisat/mtl/Map.h"
 #include "mcl/Equivs.h"
 #include "mcl/CircPrelude.h"
+#include "tip/unroll/Bmc.h"
 #include "tip/reductions/Substitute.h"
 #include "tip/reductions/TemporalDecomposition.h"
 #include "tip/reductions/RemoveUnused.h"
@@ -320,7 +321,7 @@ void temporalDecompositionSmart(TipCirc& tip, unsigned min_cycles, unsigned max_
 
 void temporalDecomposition(TipCirc& tip, unsigned cycles)
 {
-    tip.bmc(0, cycles);
+    basicBmc(tip, 0, cycles, /* no liveness */false);
 
     // Figure out the current maximal input-number in the reset circuit:
     vec<vec<int> > init_num_map;

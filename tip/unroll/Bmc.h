@@ -41,6 +41,7 @@ class BasicBmc {
     Clausifyer<Solver> cl;
     GMap<Sig>          umap;       // Reusable unroll-map.
     unsigned           cycle;      // Current cycle the circuit is unrolled to.
+    bool               check_live; // Indicates if liveness properties should be checked.
 
     unsigned           unresolved_safety;
     unsigned           unresolved_liveness;
@@ -57,7 +58,7 @@ class BasicBmc {
     void nextLiveness();
 
 public:
-    BasicBmc(TipCirc& t);
+    BasicBmc(TipCirc& t, bool check_live_ = true);
 
     void unrollCycle();
     void decideCycle();
@@ -73,7 +74,7 @@ public:
 //=================================================================================================
 // Different BMC implementations:
 
-void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle);
+void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle, bool check_live = true);
 void simpBmc (TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle);
 void simpBmc2(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle);
 

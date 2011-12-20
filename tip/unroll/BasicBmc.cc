@@ -34,6 +34,8 @@ using namespace Minisat;
 
 void BasicBmc::nextLiveness()
 {
+    assert(check_live);
+
     // Initialize live_data for next cycle:
     live_data.push();
     live_data.last().loop_now    = mkLit(s.newVar());
@@ -72,12 +74,13 @@ void BasicBmc::nextLiveness()
 }
 
 
-BasicBmc::BasicBmc(TipCirc& t) 
+BasicBmc::BasicBmc(TipCirc& t, bool check_live_)
   : tip(t), 
     solve_time(0),
     unroll(tip, ui, uc, true),
     cl(uc, s),
     cycle(0),
+    check_live(check_live_),
     unresolved_safety(0),
     unresolved_liveness(0)
 {
@@ -90,7 +93,7 @@ BasicBmc::BasicBmc(TipCirc& t)
             unresolved_liveness++;
     
     // Handle liveness-encoding:
-    if (unresolved_liveness > 0){
+    if (check_live && unresolved_liveness > 0){
 
         // Create looping state variables:
         for (int i = 0; i < unroll.numFlops(); i++)
@@ -133,7 +136,7 @@ void BasicBmc::unrollCycle()
         }
     }
 
-    if (unresolved_liveness > 0)
+    if (check_live && unresolved_liveness > 0)
         nextLiveness();
 
     cycle++;
@@ -189,45 +192,33 @@ void BasicBmc::decideCycle()
     }
 
     // Do SAT-tests:
-    unresolved_liveness = 0;
-    for (LiveProp p = 0; p < tip.live_props.size(); p++){
-        if (tip.live_props[p].stat != pstat_Unknown)
-            continue;
+    if (check_live){
+        unresolved_liveness = 0;
+        for (LiveProp p = 0; p < tip.live_props.size(); p++){
+            if (tip.live_props[p].stat != pstat_Unknown)
+                continue;
             
-        Lit loop_now     = live_data.last().loop_now;
-        Lit live_in_loop = live_data.last().live_in_loop[p];
+            Lit loop_now     = live_data.last().loop_now;
+            Lit live_in_loop = live_data.last().live_in_loop[p];
 
-        assert(loop_now != lit_Undef);
-        assert(live_in_loop != lit_Undef);
+            assert(loop_now != lit_Undef);
+            assert(live_in_loop != lit_Undef);
 
-        if (s.solve(loop_now, live_in_loop)){
-#if 0
-            // Debug:
-            for (int i = 0; i < live_data.size(); i++){
-                printf("... live_data[%d].loop_now = %c\n", i,
-                       s.modelValue(live_data[i].loop_now) == l_Undef ? 'x' :
-                       s.modelValue(live_data[i].loop_now) == l_True  ? '1' : '0');
-            }
-
-            for (int i = 0; i < live_data.size(); i++)
-                printf("... live_data[%d].loop_before = %c\n", i,
-                       s.modelValue(live_data[i].loop_before) == l_Undef ? 'x' :
-                       s.modelValue(live_data[i].loop_before) == l_True  ? '1' : '0');
-#endif
-
-            // Property falsified, create and extract trace:
-            Trace             cex    = tip.newTrace();
-            vec<vec<lbool> >& frames = tip.traces[cex].frames;
-            for (int k = 0; k < ui.size(); k++){
-                frames.push();
-                for (int l = 0; l < ui[k].size(); l++)
-                    frames.last().push(cl.modelValue(ui[k][l]));
-            }
-            tip.adaptTrace(frames);
-            tip.live_props[p].stat = pstat_Falsified;
-            tip.live_props[p].cex  = cex;
-        }else
-            unresolved_liveness++;
+            if (s.solve(loop_now, live_in_loop)){
+                // Property falsified, create and extract trace:
+                Trace             cex    = tip.newTrace();
+                vec<vec<lbool> >& frames = tip.traces[cex].frames;
+                for (int k = 0; k < ui.size(); k++){
+                    frames.push();
+                    for (int l = 0; l < ui[k].size(); l++)
+                        frames.last().push(cl.modelValue(ui[k][l]));
+                }
+                tip.adaptTrace(frames);
+                tip.live_props[p].stat = pstat_Falsified;
+                tip.live_props[p].cex  = cex;
+            }else
+                unresolved_liveness++;
+        }
     }
 
     solve_time += cpuTime() - time_before;
@@ -236,7 +227,7 @@ void BasicBmc::decideCycle()
 
 bool BasicBmc::done()
 {
-    return unresolved_safety == 0 && unresolved_liveness == 0;
+    return unresolved_safety == 0 && (!check_live || unresolved_liveness == 0);
 }
 
 
@@ -260,12 +251,15 @@ int      BasicBmc::depth (){ return cycle; }
 // Implementation of Basic BMC:
 //
 
-void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
+void basicBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle, bool check_live)
 {
     if (begin_cycle >= stop_cycle)
         return;
 
-    BasicBmc bmc(tip);
+    BasicBmc bmc(tip, check_live);
+
+    if (bmc.done()) // Escape here for cosmetic reasons.
+        return;
 
     for (uint32_t i = 0; i < begin_cycle; i++)
         bmc.unrollCycle();
