@@ -59,6 +59,7 @@ int main(int argc, char** argv)
     IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
     IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
     IntOption fce  ("MAIN", "fce",  "Fairness constraint extraction level (0=off).", 0);
+    BoolOption fce_prop("MAIN", "fce-prop", "Use liveness properties in fairness constraint extraction.", true);
     BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
     BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
     IntOption td   ("MAIN", "td",   "Use temporal decomposition (-2=auto, -1=none, otherwise minimum unrolling).", -2, IntRange(-1, INT32_MAX));
@@ -126,7 +127,7 @@ int main(int argc, char** argv)
         temporalDecompositionSmart(tc, td_depth, tdmax);
 
     if (fce)
-        fairnessConstraintExtraction(tc, fce);
+        fairnessConstraintExtraction(tc, fce, fce_prop);
 
     if (sce > 0){
         tc.sce(sce == 1, false);

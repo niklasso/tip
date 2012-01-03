@@ -27,7 +27,7 @@ namespace Tip {
 // Constraints extraction:
 
 void semanticConstraintExtraction(TipCirc& tip, bool use_minimize_alg = true, bool only_coi = false);
-void fairnessConstraintExtraction(TipCirc& tip, int level);
+void fairnessConstraintExtraction(TipCirc& tip, int level, bool use_prop);
 
 //=================================================================================================
 } // namespace Tip

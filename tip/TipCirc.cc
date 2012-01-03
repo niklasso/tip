@@ -291,6 +291,18 @@ namespace Tip {
     }
 
 
+    void TipCirc::printSig(Sig x) const
+    {
+        if (x == sig_Undef)
+            printf("x");
+        else if (x == sig_True)
+            printf("1");
+        else if (x == sig_False)
+            printf("0");
+        else
+            printf("%s%c%d", sign(x)?"-":"", type(x)==gtype_Inp?(flps.isFlop(gate(x))?'f':'i'):'a', index(gate(x)));
+    }
+
     void TipCirc::printCirc() const
     {
         // Print main circuit:

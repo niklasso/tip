@@ -198,6 +198,7 @@ public:
     //---------------------------------------------------------------------------------------------
     // Debug:
 
+    void printSig          (Sig x) const;
     void printCirc         () const;
     void printTrace        (FILE* out, const vec<vec<lbool> >& tr) const;
 
