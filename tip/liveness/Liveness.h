@@ -29,6 +29,7 @@ namespace Tip {
 
 void checkLiveness     (TipCirc& tip, int k);
 void checkLivenessBiere(TipCirc& tip, int kind);
+void writeLivenessBiere(TipCirc& tip, int kind, const char* file);
 void bmcLivenessBiere  (TipCirc& tip, int kind);
 
 //=================================================================================================

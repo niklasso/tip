@@ -137,16 +137,19 @@ int main(int argc, char** argv)
         tc.stats();
     }
 
+    if (embed)
+        embedConstraints(tc);
+
     // Embed fairness constraints and merge "justice" signals:
     embedFairness(tc);
     tc.stats();
 
-    if (embed)
-        embedConstraints(tc);
-
     // TODO: is there a better place in the ordering for this?
     if (aiger != NULL){
-        tc.writeAiger(aiger);
+        if (strcmp(alg, "biere") == 0)
+            writeLivenessBiere(tc, kind, aiger);
+        else
+            tc.writeAiger(aiger);
         exit(0); }
 
     if (strcmp(alg, "bmc") == 0)

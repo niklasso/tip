@@ -166,6 +166,15 @@ void bmcLivenessBiere(TipCirc& tip, int kind)
     tip.bmc(0,UINT32_MAX);
 }
 
+void writeLivenessBiere(TipCirc& tip, int kind, const char* file)
+{
+    embedLivenessBiere(tip,kind);
+    printf("--- writing AIGER ---\n");
+    tip.writeAiger(file);
+}
+
+
+
 //=================================================================================================
 // Liveness Checking:
 //
