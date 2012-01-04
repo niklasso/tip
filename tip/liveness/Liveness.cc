@@ -137,6 +137,41 @@ void embedLivenessBiere(TipCirc& tip, int kind)
         
         // bad
         bad = tip.main.mkAnd(eq_out, triggered_);
+    } else if ( kind == 2 ) {
+        // Biere trick with constant flops, no extra inputs, and one equality comparison
+        
+        // static flops
+        vec<Gate> s_orig;
+        vec<Gate> s_comp;
+        int nflops = tip.flps.size(); // important to save this, since it will change in the loop!
+        for (int i = 0; i < nflops; i++) {
+            Gate s_o = tip.flps[i];
+            Gate s_c = gate(tip.main.mkInp());
+            s_orig.push(s_o);
+            s_comp.push(s_c);
+            tip.flps.define(s_c, mkSig(s_c), tip.init.mkInp());
+        }
+        
+        // eq_in is true when our incoming state is equal to the static state
+        Sig eq_in = sig_True;
+        for (int i = 0; i < s_orig.size(); i++) {
+            Sig a = mkSig(s_orig[i]);
+            Sig b = mkSig(s_comp[i]);
+            eq_in = tip.main.mkAnd(eq_in, ~tip.main.mkXor(a,b));
+        }
+
+        // seen keeps track of if we've seen the static state
+        Gate pre_seen = gate(tip.main.mkInp());
+        Sig seen = tip.main.mkOr(eq_in, mkSig(pre_seen));
+        tip.flps.define(pre_seen, seen);
+
+        // triggered becomes true when seen is true and just is true
+        Gate pre_trigd = gate(tip.main.mkInp());
+        Sig trigd = tip.main.mkOr(tip.main.mkAnd(just,seen), mkSig(pre_trigd));
+        tip.flps.define(pre_trigd, trigd);
+
+        // bad
+        bad = tip.main.mkAnd(eq_in, mkSig(pre_trigd));
     } else {
         printf("*** kind=%d not recognized!\n",kind);
         return;
