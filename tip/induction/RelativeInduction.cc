@@ -58,12 +58,13 @@ namespace Tip {
         //===================================================================================================
         // Temporal Relative Induction Prover:
 
-        BoolOption opt_fwd_revive  ("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", false);
-        BoolOption opt_bwd_revive  ("RIP", "rip-bwd-rev",  "Use revival of backward-subsumed clauses", false);
-        BoolOption opt_fwd_inst    ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
-        BoolOption opt_order_heur  ("RIP", "rip-order",    "Use generalization order heuristic", false);
-        IntOption  opt_restart     ("RIP", "rip-restart",  "Use this interval for rip-engine restarts (0=off)", 0);
-        BoolOption opt_restart_luby("RIP", "rip-restart-luby", "Use luby sequence for rip-engine restarts", false);
+        BoolOption opt_fwd_revive   ("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", false);
+        BoolOption opt_bwd_revive   ("RIP", "rip-bwd-rev",  "Use revival of backward-subsumed clauses", false);
+        BoolOption opt_fwd_inst     ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
+        BoolOption opt_order_heur   ("RIP", "rip-order",    "Use generalization order heuristic", false);
+        IntOption  opt_restart      ("RIP", "rip-restart",  "Use this interval for rip-engine restarts (0=off)", 0);
+        BoolOption opt_restart_luby ("RIP", "rip-restart-luby", "Use luby sequence for rip-engine restarts", false);
+        IntOption  opt_max_gen_tries("RIP", "rip-gen-tries","Max number of tries in clause generalization", 32);
 
         class Trip {
             TipCirc&             tip;
@@ -98,6 +99,7 @@ namespace Tip {
             bool                 order_heur;
             uint32_t             restart_ival;
             bool                 restart_luby;
+            uint32_t             max_gen_tries;
 
             // Statistics:
             double               cpu_time;
@@ -197,12 +199,13 @@ namespace Tip {
 
             Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), init(t), prop(t, F), step(t, F), 
 
-                               fwd_revive  (opt_fwd_revive),
-                               bwd_revive  (opt_bwd_revive),
-                               fwd_inst    (opt_fwd_inst),
-                               order_heur  (opt_order_heur),
-                               restart_ival(opt_restart),
-                               restart_luby(opt_restart_luby),
+                               fwd_revive   (opt_fwd_revive),
+                               bwd_revive   (opt_bwd_revive),
+                               fwd_inst     (opt_fwd_inst),
+                               order_heur   (opt_order_heur),
+                               restart_ival (opt_restart),
+                               restart_luby (opt_restart_luby),
+                               max_gen_tries(opt_max_gen_tries),
 
                                cpu_time  (0),
 
@@ -288,21 +291,48 @@ namespace Tip {
                 printf("[generalize] begin d = ");
                 printClause(d);
                 printf("\n"); }
-            for (int i = 0; d.size() > 1 && i < try_remove.size(); i++)
-                if (find(d, try_remove[i])){
-                    Clause cand = d - try_remove[i];
-                    if (tip.verbosity >= 4){
-                        printf("[generalize] cand = ");
-                        printClause(cand);
-                        printf("\n"); }
-                    if (step.prove(cand, e) && init.prove(cand, e, d)){
-                        assert(subsumes(d, cand));
+            for (unsigned tries = 0; tries < max_gen_tries; tries++){
+                bool     repeat      = false;
+                bool     failed      = false;
+                unsigned size_before = d.size();
+                for (int i = 0; d.size() > 1 && i < try_remove.size(); i++)
+                    if (find(d, try_remove[i])){
+                        Clause cand = d - try_remove[i];
                         if (tip.verbosity >= 4){
-                            printf("[generalize] refine d = ");
-                            printClause(d);
+                            printf("[generalize] cand = ");
+                            printClause(cand);
                             printf("\n"); }
+                        if (step.prove(cand, e) && init.prove(cand, e, d)){
+                            if (failed)
+                                repeat = true;
+                            assert(subsumes(d, cand));
+                            if (tip.verbosity >= 4){
+                                printf("[generalize] refine d = ");
+                                printClause(d);
+                                printf("\n"); }
+                        }else
+                            failed = true;
                     }
-                }
+
+#if 0
+                static int total = 0;
+                static int skipped = 0;
+
+                total++;
+                if (!repeat)
+                    skipped++;
+
+                if (!repeat)
+                    printf("[generalize] retry skipped (%4.1f %%).\n", skipped*100 / (double)total);
+#endif
+
+                if (tip.verbosity >= 2 && tries > 0 && d.size() < size_before)
+                    printf("[generalize] retry %d at cycle %d shrunk with %d                     \n", 
+                           tries, d.cycle, size_before - d.size());
+
+                if (!repeat) break;
+            }
+            
             assert(subsumes(d, c));
             c = d;
             if (tip.verbosity >= 4){
