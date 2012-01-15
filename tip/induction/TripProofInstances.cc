@@ -738,10 +738,10 @@ namespace Tip {
         unroll(umap[1]);
 
         // Extract all needed references:
-        extractFlopIns    (tip, umap[0], cl, *solver, umapl[0], inputs);
         extractInputs     (tip, umap[0], cl, *solver, umapl[0], inputs);
         extractLiveProps  (tip, umap[0], cl, *solver, umapl[0]);
         extractInputs     (tip, umap[1], cl, *solver, umapl[1], inputs);
+        extractFlopIns    (tip, umap[0], cl, *solver, umapl[0], inputs);
         extractSafeProps  (tip, umap[1], cl, *solver, umapl[1]);
         extractLiveProps  (tip, umap[1], cl, *solver, umapl[1]);
         umapl[0][gate_True] = cl.clausify(gate_True);
@@ -971,8 +971,8 @@ namespace Tip {
             id[*git] = mkSig(*git);
 
         // Extract all needed references:
-        extractFlopIns  (tip, id, cl, *solver, umapl, inputs);
         extractInputs   (tip, id, cl, *solver, umapl, inputs);
+        extractFlopIns  (tip, id, cl, *solver, umapl, inputs);
         extractFlopOuts (tip, id, cl, *solver, umapl, dummy);
         extractLiveProps(tip, id, cl, *solver, umapl);
         umapl[gate_True] = cl.clausify(gate_True);
