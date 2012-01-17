@@ -1162,12 +1162,22 @@ namespace Tip {
         void Trip::printStats(unsigned curr_cycle, bool newline)
         {
             if (tip.verbosity >= 2 || (newline && tip.verbosity >= 1)){
+                // Calculate unknown properties:
+                unsigned n_safes = 0, n_lives = 0;
+                for (SafeProp p = 0; p < tip.safe_props.size(); p++)
+                    if (tip.safe_props[p].stat == pstat_Unknown)
+                        n_safes++;
+                for (LiveProp p = 0; p < tip.live_props.size(); p++)
+                    if (tip.live_props[p].stat == pstat_Unknown)
+                        n_lives++;
+
                 printf("[rip] ");
                 printf("%d:", size());
                 for (int i = 0; i < F.size(); i++){
                     printf("%c%d", i == (int)curr_cycle ? '*' : ' ', F_size[i]);
                 }
                 printf(" (%d) = %d, time = %.1f s", n_inv, n_total, cpu_time);
+                printf(", #safes=%d, #lives=%d", n_safes, n_lives);
                 printf(newline || tip.verbosity >= 3 ? "\n" : "\r");
                 fflush(stdout);
             }
