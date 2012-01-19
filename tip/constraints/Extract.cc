@@ -441,6 +441,29 @@ void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands)
             }
             printf("found %d justice signals\n", justs.size());
 
+            if (use_prop){
+                int i,j;
+                for (i = j = 0; i < monos.size(); i++){
+                    Lit x0 = cl.clausify(umap0[gate(monos[i])] ^ sign(monos[i]));
+                    for (int k = 0; k < justs.size(); k++){
+                        if (!s.solve(justs[k],x0)){
+                            printf("monotonic signal x incompatible with just; setting to 0 (upgraded).\n");
+                            s.addClause(~x0);
+                            trues.push(~monos[i]);
+                            goto next_mono;
+                        }else if (!s.solve(justs[k],~x0)){
+                            printf("monotonic signal x incompatible with just; setting to 1 (upgraded).\n");
+                            s.addClause(x0);
+                            trues.push(monos[i]);
+                            goto next_mono;
+                        }
+                    }
+                    monos[j++] = monos[i];
+                next_mono:;
+                }
+                monos.shrink(i - j);
+            }
+
             // trying out all candidates 
             for ( int i = 0; i < cands.size(); i++ ) {
                 Lit x0 = cl.clausify(umap0[cands[i]]);
@@ -817,10 +840,11 @@ void fairnessConstraintExtraction(TipCirc& tip, int level, bool use_prop)
             vec<Gate>        cands; gates.copyTo(cands);
             
             for (;;){
-                int n = monos.size() + trues.size();
+                int n_monos = monos.size();
+                int n_trues = trues.size();
                 ms.refineCandsMonotonic(cands, monos, trues);
                 printf("found %d monotonic signals, %d constant signals...\n", monos.size(), trues.size());
-                if (monos.size() + trues.size() == n)
+                if (trues.size() == n_trues && monos.size() == n_monos)
                     break;
             }
             addDenseFairnessConstraint(tip, p, monos, trues, level);
