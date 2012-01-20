@@ -422,6 +422,8 @@ void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands)
             }
         }
 
+        // Check if current set of constraints are consistent:
+        bool okay() { return s.solve(); }
 
         void refineCandsMonotonic(vec<Gate>& cands, vec<Sig>& monos, vec<Sig>& trues)
         {
@@ -847,7 +849,12 @@ void fairnessConstraintExtraction(TipCirc& tip, int level, bool use_prop)
                 if (trues.size() == n_trues && monos.size() == n_monos)
                     break;
             }
-            addDenseFairnessConstraint(tip, p, monos, trues, level);
+            if (ms.okay())
+                addDenseFairnessConstraint(tip, p, monos, trues, level);
+            else{
+                printf("*** Derived fairness constraints trivially solves property!\n");
+                tip.live_props[p].stat = pstat_Proved;
+            }
         }
     
     printf("\n*** Monotonic Signals CPU-time: %.1f s\n", cpuTime() - time_before);
