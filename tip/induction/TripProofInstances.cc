@@ -689,7 +689,7 @@ namespace Tip {
     void InitInstance2::printStats()
     {
         printf("[init-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
-               (double)solver->nVars(), (double)solver->nClauses(), (double)solver->conflicts);
+               (double)solver->nFreeVars(), (double)solver->nClauses(), (double)solver->conflicts);
     }
     
     //===================================================================================================
@@ -904,7 +904,7 @@ namespace Tip {
     void PropInstance::printStats()
     {
         printf("[prop-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
-               (double)solver->nVars(), (double)solver->nClauses(), (double)solver->conflicts);
+               (double)solver->nFreeVars(), (double)solver->nClauses(), (double)solver->conflicts);
     }
 
     //===================================================================================================
@@ -1196,7 +1196,7 @@ namespace Tip {
     void StepInstance::printStats()
     {
         printf("[step-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
-               (double)solver->nVars(), (double)solver->nClauses(), (double)solver->conflicts);
+               (double)solver->nFreeVars(), (double)solver->nClauses(), (double)solver->conflicts);
     }
 
 
