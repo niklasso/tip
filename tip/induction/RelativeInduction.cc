@@ -65,6 +65,7 @@ namespace Tip {
         IntOption  opt_restart      ("RIP", "rip-restart",  "Use this interval for rip-engine restarts (0=off)", 0);
         BoolOption opt_restart_luby ("RIP", "rip-restart-luby", "Use luby sequence for rip-engine restarts", false);
         IntOption  opt_max_gen_tries("RIP", "rip-gen-tries","Max number of tries in clause generalization", 32);
+        IntOption  opt_cnf_level    ("RIP", "rip-cnf", "Effort level for CNF simplification (0-2)", 1, IntRange(0,2));
 
         class Trip {
             TipCirc&             tip;
@@ -197,7 +198,7 @@ namespace Tip {
             void             printInvariant  ();
             void             verifyInvariant ();
 
-            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), init(t), prop(t, F), step(t, F), 
+            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), init(t, opt_cnf_level), prop(t, F, opt_cnf_level), step(t, F, opt_cnf_level), 
 
                                fwd_revive   (opt_fwd_revive),
                                bwd_revive   (opt_bwd_revive),

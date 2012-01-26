@@ -22,7 +22,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/unroll/Unroll.h"
 #include "tip/induction/TripProofInstances.h"
 
-//#define EXPENSIVE_CNF_PREPROCESS
 //#define VERBOSE_DEBUG
 
 namespace Tip {
@@ -533,6 +532,9 @@ namespace Tip {
         // Clear solver & gate to solver maps:
         delete solver;
         solver = new SimpSolver();
+        if (cnf_level == 0)
+            solver->eliminate(true);
+
         umapl[0].clear();
         umapl[0].growTo(tip.init.lastGate(), lit_Undef);
         inputs.clear();
@@ -551,10 +553,10 @@ namespace Tip {
         umapl[0][gate_True] = cl.clausify(gate_True);
 
         // Simplify CNF:
-#ifdef EXPENSIVE_CNF_PREPROCESS
-        solver->use_asymm = true;
-        solver->grow = 2;
-#endif
+        if (cnf_level >= 2){
+            solver->use_asymm = true;
+            solver->grow = 2;
+        }
         solver->eliminate(true);
         solver->thaw();
     }
@@ -671,7 +673,8 @@ namespace Tip {
     }
 
 
-    InitInstance2::InitInstance2(const TipCirc& t) : tip(t), solver(NULL), cpu_time(0)
+    InitInstance2::InitInstance2(const TipCirc& t, int cnf_level_) 
+        : tip(t), solver(NULL), cpu_time(0), cnf_level(cnf_level_)
     {
         reset();
     }
@@ -717,6 +720,9 @@ namespace Tip {
         // Clear solver & gate to solver maps:
         delete solver;
         solver = new SimpSolver();
+        if (cnf_level == 0)
+            solver->eliminate(true);
+
         umapl[0].clear();
         umapl[0].growTo(tip.main.lastGate(), lit_Undef);
         umapl[1].clear();
@@ -753,10 +759,10 @@ namespace Tip {
             solver->addClause(act_cnstrs);
 
         // Simplify CNF:
-#ifdef EXPENSIVE_CNF_PREPROCESS
-        solver->use_asymm = true;
-        solver->grow = 2;
-#endif
+        if (cnf_level >= 2){
+            solver->use_asymm = true;
+            solver->grow = 2;
+        }
         solver->eliminate(true);
         solver->thaw();
     }
@@ -882,8 +888,8 @@ namespace Tip {
     }
 
 
-    PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
-        : tip(t), F(F_), solver(NULL), act_cnstrs(lit_Undef), cpu_time(0)
+    PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, int cnf_level_)
+        : tip(t), F(F_), solver(NULL), act_cnstrs(lit_Undef), cpu_time(0), cnf_level(cnf_level_)
     {
         reset();
     }
@@ -953,6 +959,9 @@ namespace Tip {
         // Clear solver & gate to solver maps:
         delete solver;
         solver = new SimpSolver();
+        if (cnf_level == 0)
+            solver->eliminate(true);
+
         umapl.clear();
         umapl.growTo(tip.main.lastGate(), lit_Undef);
         inputs.clear();
@@ -982,10 +991,10 @@ namespace Tip {
             solver->addClause(act_cnstrs);
 
         // Simplify CNF:
-#ifdef EXPENSIVE_CNF_PREPROCESS
-        solver->use_asymm = true;
-        solver->grow = 2;
-#endif
+        if (cnf_level >= 2){
+            solver->use_asymm = true;
+            solver->grow = 2;
+        }
         solver->eliminate(true);
         solver->thaw();
     }
@@ -1171,8 +1180,8 @@ namespace Tip {
         return prove(c, yes, dummy);
     }
 
-    StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_)
-        : tip(t), F(F_), solver(NULL), cpu_time(0)
+    StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, int cnf_level_)
+        : tip(t), F(F_), solver(NULL), cpu_time(0), cnf_level(cnf_level_)
     {
         reset();
     }

@@ -166,11 +166,12 @@ namespace Tip {
         vec<Lit>       inputs;
         LitSet         lset;
         double         cpu_time;
+        int            cnf_level;  // Effort level for CNF simplification.
         
         void reset();
         
     public:
-        InitInstance2(const TipCirc& t_);
+        InitInstance2(const TipCirc& t_, int cnf_level_);
         ~InitInstance2();
         
         bool prove(const Clause& c, const Clause& bot, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
@@ -201,6 +202,7 @@ namespace Tip {
         Lit            act_cnstrs;
         LitSet         lset;
         double         cpu_time;
+        int            cnf_level;  // Effort level for CNF simplification.
         
         void reset();
         //lbool evaluate(const InstanceModel& model, Sig p);
@@ -209,7 +211,7 @@ namespace Tip {
         void clearClauses();
         void addClause   (const Clause& c);
         
-        PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_);
+        PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, int cnf_level_);
         ~PropInstance();
         
         lbool prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle);
@@ -238,6 +240,7 @@ namespace Tip {
         Lit            act_cnstrs;
         LitSet         lset;
         double         cpu_time;
+        int            cnf_level;  // Effort level for CNF simplification.
         
         void reset();
         void evaluate(vec<Sig>& clause);
@@ -247,7 +250,7 @@ namespace Tip {
 
         void resetCycle(unsigned cycle, unsigned num_clauses);
 
-        StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_);
+        StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, int cnf_level_);
         ~StepInstance();
         
         bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
