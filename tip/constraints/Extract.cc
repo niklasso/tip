@@ -400,8 +400,13 @@ void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands)
         GMap<Sig>          umap1;
         Solver             s;
         Clausifyer<Solver> cl;
+        vec<Lit>           justs;
 
     public:
+        unsigned nSolves() const { return s.solves; }
+        unsigned nConflicts() const { return s.conflicts; }
+        unsigned nDecisions() const { return s.decisions; }
+
         MonotonicSignals(const TipCirc& t, LiveProp p, int level, bool use_prop_) :
             tip(t), live_p(p), effort_level(level), use_prop(use_prop_), cl(uc, s)
         {
@@ -420,17 +425,8 @@ void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands)
                     cl.clausifyAs(umap1[gate(tip.cnstrs[i][j])]^sign(tip.cnstrs[i][j]),rep1);
                 }
             }
-        }
-
-        // Check if current set of constraints are consistent:
-        bool okay() { return s.solve(); }
-
-        void refineCandsMonotonic(vec<Gate>& cands, vec<Sig>& monos, vec<Sig>& trues)
-        {
-            assert(tip.live_props[live_p].stat == pstat_Unknown);
 
             // computing all justice signals (in umap0)
-            vec<Lit> justs;
             for ( int i = 0; i < tip.fairs.size(); i++ ) {
                 Sig j = tip.fairs[i];
                 justs.push(cl.clausify(umap0[gate(j)]^sign(j)));
@@ -442,29 +438,152 @@ void refineCandsStepWithMinimize(const TipCirc& tip, vec<Sig>& cands)
                 if (effort_level >= 4) justs.push(cl.clausify(umap1[gate(j)]^sign(j)));
             }
             printf("found %d justice signals\n", justs.size());
+        }
 
+        // Check if current set of constraints are consistent:
+        bool okay() { return s.solve(); }
+
+#if 0
+        // Check if monotone signal 'x' is compatible with all fairness signals: (Simple Implementation)
+        bool checkCompatWithProp(Sig x, vec<Sig>& trues)
+        {
+            Lit x0 = cl.clausify(umap0[gate(x)] ^ sign(x));
+            for (int k = 0; k < justs.size(); k++)
+                if (!s.solve(justs[k],x0)){
+                    s.addClause(~x0);
+                    trues.push(~x);
+                    return false;
+                }
+            return true;
+        }
+#else
+        // Check if monotone signal 'x' is compatible with all fairness signals: (Fast Implementation)
+        bool checkCompatWithProp(Sig x, vec<Sig>& trues)
+        {
+            Lit x0 = cl.clausify(umap0[gate(x)] ^ sign(x));
+            Lit x1 = cl.clausify(umap1[gate(x)] ^ sign(x));
+
+            vec<Lit> assumps; 
+            justs.copyTo(assumps);
+            assumps.push(x0);
+            assumps.push(x1);
+
+            // If simultaneusly compatible with all fairness signals, return true directly:
+            if (s.solve(assumps))
+                return true;
+
+            int num_conf_prop = 0;
+            for (int i = 0; i < s.conflict.size(); i++)
+                if (~s.conflict[i] != x0 && ~s.conflict[i] != x1)
+                    num_conf_prop++;
+
+            // At most one property literal in conflicting set. I.e. only '~x0' and/or '~x1 and
+            // potentially one property literal. We can then return directly because we know that
+            // the conflict was not between two (or more) fairness signals:
+            if (num_conf_prop <= 1){
+                s.addClause(~x0);
+                trues.push(~x);
+                return false; }
+
+            // Check compatibility with each fairness signal. For each model, filter away all
+            // fairness signals that are true and thus also is compatible with 'x':
+            assumps.pop();
+            assumps.pop();
+            for (int k = 0; k < assumps.size(); k++)
+                if (!s.solve(assumps[k], x0, x1)){
+                    s.addClause(~x0);
+                    trues.push(~x);
+                    return false;
+                }else{
+                    for (int i = k+1; i < assumps.size(); i++)
+                        if (s.modelValue(assumps[i]) == l_True){
+                            Lit tmp      = assumps[i];
+                            assumps[i]   = assumps[k+1];
+                            assumps[k+1] = tmp;
+                            k++;
+                        }
+                }
+
+            return true;
+        }
+#endif
+
+
+        bool upgradeMonotonic(vec<Sig>& monos, vec<Sig>& trues)
+        {
+            bool improved = false;
             if (use_prop){
                 int i,j;
                 for (i = j = 0; i < monos.size(); i++){
-                    Lit x0 = cl.clausify(umap0[gate(monos[i])] ^ sign(monos[i]));
-                    for (int k = 0; k < justs.size(); k++){
-                        if (!s.solve(justs[k],x0)){
-                            printf("monotonic signal x incompatible with just; setting to 0 (upgraded).\n");
-                            s.addClause(~x0);
-                            trues.push(~monos[i]);
-                            goto next_mono;
-                        }else if (!s.solve(justs[k],~x0)){
-                            printf("monotonic signal x incompatible with just; setting to 1 (upgraded).\n");
-                            s.addClause(x0);
-                            trues.push(monos[i]);
-                            goto next_mono;
-                        }
-                    }
-                    monos[j++] = monos[i];
-                next_mono:;
+                    if (!checkCompatWithProp(monos[i], trues)){
+                        printf("monotonic signal x incompatible with just; setting to 0 (upgraded).\n");
+                        improved = true;
+                    }else if (!checkCompatWithProp(~monos[i], trues)){
+                        printf("monotonic signal x incompatible with just; setting to 1 (upgraded).\n");
+                        improved = true;
+                    }else
+                        monos[j++] = monos[i];
                 }
                 monos.shrink(i - j);
             }
+            return improved;
+        }
+
+
+        bool refineCandsMonotonicPol(bool sig, vec<Gate>& cands, vec<Sig>& monos, vec<Sig>& trues)
+        {
+            bool improved = false;
+            // trying out all candidates 
+            for (int i = 0; i < cands.size(); i++){
+                Sig x  = mkSig(cands[i], sig);
+                Lit x0 = cl.clausify(umap0[gate(x)] ^ sign(x));
+                Lit x1 = cl.clausify(umap1[gate(x)] ^ sign(x));
+                printf(" #cands-left: %d\n", cands.size() - i);
+                
+                // monotonic?
+                s.rnd_pol = true;
+                if (!s.solve(x0,~x1)){
+                    improved = true;
+                    s.rnd_pol = false;
+                    // setting x as stable (both ways!)
+                    s.addClause(~x0,x1);
+                    s.addClause(~x1,x0);
+                    monos.push(mkSig(gate(x)));
+
+                    // checking compatability with justice signals
+                    if (use_prop)
+                        if (!checkCompatWithProp(x, trues) || !checkCompatWithProp(~x,trues))
+                            monos.pop();
+
+                    // remove from candidates
+                    cands[i] = cands.last();
+                    cands.pop();
+                    i--;
+                }else{
+                    s.rnd_pol = false;
+                    // Reduce candidates:
+                    for (int j = i+1; j < cands.size(); j++){
+                        Sig x  = mkSig(cands[j], sig);
+                        Lit x0 = cl.clausify(umap0[gate(x)] ^ sign(x));
+                        Lit x1 = cl.clausify(umap1[gate(x)] ^ sign(x));
+
+                        if (s.modelValue(x0) == l_True && s.modelValue(x1) == l_False){
+                            Gate tmp = cands[j];
+                            cands[j] = cands[i+1];
+                            cands[i+1] = tmp;
+                            i++;
+                        }
+                    }
+                }
+            }
+
+            return improved;
+        }
+
+
+        void refineCandsMonotonic(vec<Gate>& cands, vec<Sig>& monos, vec<Sig>& trues)
+        {
+            assert(tip.live_props[live_p].stat == pstat_Unknown);
 
             // trying out all candidates 
             for ( int i = 0; i < cands.size(); i++ ) {
@@ -672,110 +791,6 @@ void addDenseFairnessConstraint(TipCirc& tip, LiveProp live_p, const vec<Sig>& m
     }
 }
 
-
-
-void refineCandsMonotonic(TipCirc& tip, int level)
-{
-    vec<Gate> gates;
-    for (GateIt git = tip.main.begin(); git != tip.main.end(); ++git)
-        gates.push(*git);
-
-    for ( LiveProp p = 0; p < tip.live_props.size(); p++ )
-      if ( tip.live_props[p].stat == pstat_Unknown ) {
-        Circ               uc;
-        vec<IFrame>        ui;           // Unused here.
-        UnrollCirc         unroller(tip, ui, uc, false);
-        GMap<Sig>          umap0;
-        GMap<Sig>          umap1;
-        Solver             s;
-        Clausifyer<Solver> cl(uc, s);
-
-        printf("=== Liveness property %d:\n", p);
-
-        unroller(umap0);
-        unroller(umap1);
-
-        // setting constraints
-        for (unsigned int i = 0; i < tip.cnstrs.size(); i++) {
-            Lit rep0 = cl.clausify(umap0[gate(tip.cnstrs[i][0])]^sign(tip.cnstrs[i][0]));
-            Lit rep1 = cl.clausify(umap1[gate(tip.cnstrs[i][0])]^sign(tip.cnstrs[i][0]));
-            for (int j = 1; j < tip.cnstrs[i].size(); j++) {
-              cl.clausifyAs(umap0[gate(tip.cnstrs[i][j])]^sign(tip.cnstrs[i][j]),rep0);
-              cl.clausifyAs(umap1[gate(tip.cnstrs[i][j])]^sign(tip.cnstrs[i][j]),rep1);
-            }
-        }
-
-        vec<Gate> cands;
-        gates.copyTo(cands);
-        //for (int i = 0; i < tip.flps.size(); i++)
-        //    cands.push(tip.flps[i]);
-
-        // computing all justice signals (in umap0)
-        vec<Lit> justs;
-        for ( int i = 0; i < tip.fairs.size(); i++ ) {
-            Sig j = tip.fairs[i];
-            justs.push(cl.clausify(umap0[gate(j)]^sign(j)));
-            if (level >= 3) justs.push(cl.clausify(umap1[gate(j)]^sign(j)));
-        }
-        for ( int i = 0; i < tip.live_props[p].sigs.size(); i++ ) {
-            Sig j = tip.live_props[p].sigs[i];
-            justs.push(cl.clausify(umap0[gate(j)]^sign(j)));
-            if (level >= 3) justs.push(cl.clausify(umap1[gate(j)]^sign(j)));
-        }
-        printf("found %d justice signals\n", justs.size());
-
-        // trying to show implications
-        vec<Sig> monos;
-        vec<Sig> trues;
-        while ( 1 ) {
-            int n = monos.size() + trues.size();
-      
-            // trying out all candidates 
-            for ( int i = 0; i < cands.size(); i++ ) {
-                Lit x0 = cl.clausify(umap0[cands[i]]);
-                Lit x1 = cl.clausify(umap1[cands[i]]);
-          
-                // monotonic?
-                if (!s.solve(x0,~x1) || !s.solve(~x0,x1)) {
-                    // setting x as stable (both ways!)
-                    s.addClause(~x0,x1);
-                    s.addClause(~x1,x0);
-                    monos.push(mkSig(cands[i]));
-
-                    // checking compatability with justice signals
-                    for ( int j = 0; j < justs.size(); j++ ) {
-                        if (!s.solve(justs[j],x0)) {
-                            //printf("monotonic signal x incompatible with just; setting to 0.\n");
-                            s.addClause(~x0);
-                            monos.pop();
-                            trues.push(~mkSig(cands[i]));
-                            break;
-                        }
-                        else if (!s.solve(justs[j],~x0)) {
-                            //printf("monotonic signal x incompatible with just; setting to 1.\n");
-                            s.addClause(x0);
-                            monos.pop();
-                            trues.push(mkSig(cands[i]));
-                            break;
-                        }
-                    }
-
-                    // remove from candidates
-                    cands[i] = cands.last();
-                    cands.pop();
-                    i--;
-                }
-            }
-
-            if ( monos.size() + trues.size() <= n )
-              break;
-
-            printf("found %d monotonic signals, %d constant signals...\n", monos.size(), trues.size());
-        }
-        addDenseFairnessConstraint(tip, p, monos, trues, level);
-      }
-}
-
 }
 
 
@@ -813,14 +828,6 @@ void semanticConstraintExtraction(TipCirc& tip, bool use_minimize_alg, bool only
 }
 
 
-void fairnessConstraintExtractionOld(TipCirc& tip, int level)
-{
-    printf("\n*** Extracting monotonic signals...\n\n");
-    refineCandsMonotonic(tip, level);
-    printf("\n*** Done monotonic signals!\n\n");
-}
-
-
 void fairnessConstraintExtraction(TipCirc& tip, int level, bool use_prop)
 {
     double time_before = cpuTime();
@@ -836,25 +843,28 @@ void fairnessConstraintExtraction(TipCirc& tip, int level, bool use_prop)
 
     for (LiveProp p = 0; p < tip.live_props.size(); p++)
         if (tip.live_props[p].stat == pstat_Unknown){
+            double time_before_prop = cpuTime();
             MonotonicSignals ms(tip, p, level, use_prop);
             vec<Sig>         monos;
             vec<Sig>         trues;
             vec<Gate>        cands; gates.copyTo(cands);
             
-            for (;;){
-                int n_monos = monos.size();
-                int n_trues = trues.size();
-                ms.refineCandsMonotonic(cands, monos, trues);
-                printf("found %d monotonic signals, %d constant signals...\n", monos.size(), trues.size());
-                if (trues.size() == n_trues && monos.size() == n_monos)
-                    break;
-            }
+            do{
+                while (ms.refineCandsMonotonicPol(true,  cands, monos, trues)
+                     | ms.refineCandsMonotonicPol(false, cands, monos, trues))
+                    printf("found %d monotonic signals, %d constant signals...\n", monos.size(), trues.size());
+            }while(ms.upgradeMonotonic(monos, trues));
+
             if (ms.okay())
                 addDenseFairnessConstraint(tip, p, monos, trues, level);
             else{
                 printf("*** Derived fairness constraints trivially solves property!\n");
                 tip.live_props[p].stat = pstat_Proved;
             }
+
+            printf("[fce] Liveness property %d: time=%.1f s, #solves=%d, #confl=%d, #dec=%d\n", 
+                   p, cpuTime() - time_before_prop,
+                   ms.nSolves(), ms.nConflicts(), ms.nDecisions());
         }
     
     printf("\n*** Monotonic Signals CPU-time: %.1f s\n", cpuTime() - time_before);
