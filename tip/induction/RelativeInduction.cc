@@ -51,8 +51,9 @@ namespace Tip {
 
         struct EventCounter {
             unsigned k;
-            Sig      x;
-            EventCounter() : k(0), x(sig_True){}
+            Sig      q;
+            Sig      h;
+            //EventCounter() : k(0), x(sig_True){}
         };
 
         //===================================================================================================
@@ -65,7 +66,9 @@ namespace Tip {
         IntOption  opt_restart      ("RIP", "rip-restart",  "Use this interval for rip-engine restarts (0=off)", 0);
         BoolOption opt_restart_luby ("RIP", "rip-restart-luby", "Use luby sequence for rip-engine restarts", false);
         IntOption  opt_max_gen_tries("RIP", "rip-gen-tries","Max number of tries in clause generalization", 32);
+        IntOption  opt_live_enc     ("RIP", "rip-live-enc", "Incremental liveness encoding", 0, IntRange(0,2));
         IntOption  opt_cnf_level    ("RIP", "rip-cnf", "Effort level for CNF simplification (0-2)", 1, IntRange(0,2));
+
 
         class Trip {
             TipCirc&             tip;
@@ -86,7 +89,7 @@ namespace Tip {
             SMap<vec<Clause*> >  fwd_occurs;
 
             // Solver data: Should be rederivable from only independent data at any time:
-            InitInstance2        init;
+            InitInstance         init;
             PropInstance         prop;
             StepInstance         step;
 
@@ -101,6 +104,7 @@ namespace Tip {
             uint32_t             restart_ival;
             bool                 restart_luby;
             uint32_t             max_gen_tries;
+            uint32_t             live_enc;
 
             // Statistics:
             double               cpu_time;
@@ -184,6 +188,9 @@ namespace Tip {
 
 
             void             extendLiveness(LiveProp p);
+            void             extendLivenessUnaryShiftRegister(LiveProp p);
+            void             extendLivenessUnaryForgive(LiveProp p);
+            void             extendLivenessBinary(LiveProp p);
 
 
 
@@ -208,6 +215,7 @@ namespace Tip {
                                restart_ival (opt_restart),
                                restart_luby (opt_restart_luby),
                                max_gen_tries(opt_max_gen_tries),
+                               live_enc     (opt_live_enc),
 
                                cpu_time  (0),
 
@@ -229,6 +237,34 @@ namespace Tip {
             {
                 F.push();
                 F_size.push(0);
+
+                event_cnts.growTo(tip.live_props.size());
+                if (live_enc == 0){
+                    for (LiveProp p = 0; p < tip.live_props.size(); p++)
+                        if (tip.live_props[p].stat == pstat_Unknown){
+                            assert(tip.live_props[p].sigs.size() == 1);
+                            event_cnts[p].k = 0;
+                            event_cnts[p].q = sig_True;
+                            event_cnts[p].h = sig_True;
+                        }
+                }else if (live_enc == 1){
+                    for (LiveProp p = 0; p < tip.live_props.size(); p++)
+                        if (tip.live_props[p].stat == pstat_Unknown){
+                            assert(tip.live_props[p].sigs.size() == 1);
+                            event_cnts[p].k = 1;
+                            event_cnts[p].q = tip.live_props[p].sigs[0];
+                            event_cnts[p].h = sig_True;
+                        }
+                }else if (live_enc == 2){
+                    for (LiveProp p = 0; p < tip.live_props.size(); p++)
+                        if (tip.live_props[p].stat == pstat_Unknown){
+                            assert(tip.live_props[p].sigs.size() == 1);
+                            event_cnts[p].k = 1;
+                            event_cnts[p].q = tip.live_props[p].sigs[0];
+                            event_cnts[p].h = sig_True;
+                        }
+                }else
+                    assert(false);
             }
 
             ~Trip()
@@ -446,19 +482,18 @@ namespace Tip {
         }
 
 
-        void Trip::extendLiveness(LiveProp p)
+        void Trip::extendLivenessUnaryShiftRegister(LiveProp p)
         {
             assert(tip.live_props[p].sigs.size() == 1);
 
-            Sig evt = tip.live_props[p].sigs[0];
             Sig flp = tip.main.mkInp();
-            Sig out = tip.main.mkMux(evt, event_cnts[p].x, flp);
-
+            Sig evt = tip.live_props[p].sigs[0];
+            Sig out = tip.main.mkMux(evt, event_cnts[p].q, flp);
             tip.flps.define(gate(flp), out);
 
             init.extendLiveness();
-            prop.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
-            step.extendLiveness(evt, gate(flp), gate(event_cnts[p].x), out);
+            prop.extendLiveness(gate(flp), flp);
+            step.extendLiveness(gate(flp), out);
 
             num_occ.growTo(tip.main.lastGate(), 0);
 
@@ -471,12 +506,92 @@ namespace Tip {
             // Add that the new target implies the old target always:
             cls.clear();
             cls.push(~flp);
-            cls.push(event_cnts[p].x);
+            cls.push(event_cnts[p].h);
             f = Clause(cls, cycle_Undef);
             addClause(f);
 
-            event_cnts[p].x = flp;
             event_cnts[p].k++;
+            event_cnts[p].q = flp;
+            event_cnts[p].h = flp;
+        }
+
+
+        void Trip::extendLivenessUnaryForgive(LiveProp p)
+        {
+            assert(tip.live_props[p].sigs.size() == 1);
+
+            Sig flp = tip.main.mkInp();
+            Sig out = tip.main.mkOr (event_cnts[p].q, flp);
+            Sig qpr = tip.main.mkAnd(event_cnts[p].q, flp);
+            tip.flps.define(gate(flp), out);
+
+            init.extendLiveness();
+            prop.extendLiveness(gate(flp), qpr);
+            step.extendLiveness(gate(flp), out);
+
+            num_occ.growTo(tip.main.lastGate(), 0);
+
+            // Add that the new target can not be falsified up to the current cycle:
+            vec<Sig> cls;
+            cls.push(~flp);
+            Clause f(cls, size()-1);
+            addClause(f);
+
+            // Add that the new target implies the old target always:
+            cls.clear();
+            cls.push(~flp);
+            cls.push(event_cnts[p].h);
+            f = Clause(cls, cycle_Undef);
+            addClause(f);
+
+            event_cnts[p].k++;
+            event_cnts[p].q = qpr;
+            event_cnts[p].h = flp;
+        }
+
+        void Trip::extendLivenessBinary(LiveProp p)
+        {
+            assert(tip.live_props[p].sigs.size() == 1);
+
+            Sig flp = tip.main.mkInp();
+            Sig sum = tip.main.mkXor(event_cnts[p].q, flp);
+            Sig cry = tip.main.mkAnd(event_cnts[p].q, flp);
+            tip.flps.define(gate(flp), sum);
+
+            init.extendLiveness();
+            prop.extendLiveness(gate(flp), cry);
+            step.extendLiveness(gate(flp), sum);
+
+            num_occ.growTo(tip.main.lastGate(), 0);
+
+            // // Add that the new target can not be falsified up to the current cycle:
+            // vec<Sig> cls;
+            // cls.push(~flp);
+            // Clause f(cls, size()-1);
+            // addClause(f);
+            // 
+            // // Add that the new target implies the old target always:
+            // cls.clear();
+            // cls.push(~flp);
+            // cls.push(event_cnts[p].h);
+            // f = Clause(cls, cycle_Undef);
+            // addClause(f);
+
+            event_cnts[p].k *= 2;
+            event_cnts[p].q = cry;
+            //event_cnts[p].h = flp;
+        }
+
+        void Trip::extendLiveness(LiveProp p)
+        {
+            if (live_enc == 0)
+                extendLivenessUnaryShiftRegister(p);
+            else if (live_enc == 1)
+                extendLivenessUnaryForgive(p);
+            else if (live_enc == 2)
+                extendLivenessBinary(p);
+            else
+                assert(false);
         }
 
 
@@ -1050,13 +1165,14 @@ namespace Tip {
                 }
 
             // Process liveness properties:
-            event_cnts.growTo(tip.live_props.size());
+            //event_cnts.growTo(tip.live_props.size());
             for (LiveProp p = 0; p < tip.live_props.size(); p++)
                 if (tip.live_props[p].stat == pstat_Unknown){
+
                     lbool prop_res = l_False;
                     do {
                         // printf("[decideCycle] checking liveness property %d in cycle %d\n", p, size());
-                        prop_res = proveProp(~event_cnts[p].x, pred);
+                        prop_res = proveProp(~event_cnts[p].q, pred);
                         if (prop_res == l_False){
                             cands_added++;
                             cands_total_size    += pred->size();

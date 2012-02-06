@@ -129,39 +129,7 @@ namespace Tip {
     class InitInstance {
         const TipCirc& tip;
         
-        SimpSolver*    solver;
-        GMap<Lit>      umapl[2];
-        vec<Lit>       inputs;
-        vec<Lit>       outputs;
-        Lit            act_cnstrs;
-        LitSet         lset;
-        double         cpu_time;
-
-        void reset();
-        
-    public:
-        InitInstance(const TipCirc& t_);
-        ~InitInstance();
-        
-        bool prove(const Clause& c, const Clause& bot, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
-        bool prove(const Clause& c, const Clause& bot, Clause& yes);
-
-        void reduceClause(Clause& c);
-
-        void extendLiveness(Sig evt, Gate f, Gate g, Sig f_next);
-
-        uint64_t props();
-        uint64_t solves();
-        double   time();
-
-        void printStats();
-    };
-
-
-    class InitInstance2 {
-        const TipCirc& tip;
-        
-        SimpSolver*    solver;
+        SimpSolver     solver;
         GMap<Lit>      umapl[2];
         vec<Lit>       inputs;
         LitSet         lset;
@@ -171,8 +139,8 @@ namespace Tip {
         void reset();
         
     public:
-        InitInstance2(const TipCirc& t_, int cnf_level_);
-        ~InitInstance2();
+        InitInstance(const TipCirc& t_, int cnf_level_);
+        ~InitInstance();
         
         bool prove(const Clause& c, const Clause& bot, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
         bool prove(const Clause& c, const Clause& bot, Clause& yes);
@@ -194,10 +162,15 @@ namespace Tip {
         const TipCirc&            tip;
         const vec<vec<Clause*> >& F;
         
-        SimpSolver*    solver;
-        GMap<Lit>      umapl[2];
-        vec<Lit>       inputs;
-        vec<Lit>       outputs;
+        Circ           uc;              // Unrolled circuit.
+        GMap<Sig>      umap[2];         // Map for circuit unrollings.
+        Clausifyer<SimpSolver>
+                       cl;              // Clausifyer for unrolled circuit.
+
+        SimpSolver     solver;
+        vec<Sig>       inputs;
+        vec<Sig>       outputs;
+
         Lit            act_cycle;
         Lit            act_cnstrs;
         LitSet         lset;
@@ -206,6 +179,8 @@ namespace Tip {
         
         void reset();
         //lbool evaluate(const InstanceModel& model, Sig p);
+        Sig  unrollSig (Sig  x, unsigned cycle);
+        Sig  unrollGate(Gate g, unsigned cycle);
 
     public:
         void clearClauses();
@@ -216,7 +191,7 @@ namespace Tip {
         
         lbool prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle);
 
-        void extendLiveness(Sig evt, Gate f, Gate g, Sig f_next);
+        void extendLiveness(Gate f, Sig f_next);
 
         uint64_t props();
         uint64_t solves();
@@ -231,10 +206,13 @@ namespace Tip {
         const TipCirc&            tip;
         const vec<vec<Clause*> >& F;
         
-        SimpSolver*    solver;
-        GMap<Lit>      umapl;
-        vec<Lit>       inputs;
-        vec<Lit>       outputs;
+        SimpSolver     solver;
+        Clausifyer<SimpSolver> cl;
+        GMap<Sig>      umap;
+        Gate           prev_lastgate;
+        vec<Sig>       inputs;
+        vec<Sig>       outputs;
+
         vec<Lit>       activate;
         vec<unsigned>  cycle_clauses;
         Lit            act_cnstrs;
@@ -256,7 +234,7 @@ namespace Tip {
         bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
         bool prove(const Clause& c, Clause& yes);
 
-        void extendLiveness(Sig evt, Gate f, Gate g, Sig f_next);
+        void extendLiveness(Gate f, Sig f_next);
 
         uint64_t props();
         uint64_t solves();
