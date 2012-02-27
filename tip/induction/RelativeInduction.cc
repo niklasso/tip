@@ -290,28 +290,24 @@ namespace Tip {
             Clause   e;
             scheduleGeneralizeOrder(c, try_remove);
 
-            for (unsigned tries = 0; tries < max_gen_tries; tries++){
-                bool     repeat      = false;
-                bool     failed      = false;
-                for (int i = 0; d.size() > 1 && i < try_remove.size(); i++)
-                    if (find(d, try_remove[i])){
-                        Clause cand = d - try_remove[i];
-                        cls_generalizations++;
-                        if (step.prove(cand, e) && init.prove(cand, e, d)){
-                            if (tip.verbosity >= 3) printf(".%d", d.size());
-                            if (failed)
-                                repeat = true;
-                            assert(subsumes(d, cand));
-                        }else{
-                            failed = true;
-                            if (tip.verbosity >= 3) printf(".");
-                        }
-                    }
+            int reset = 0;
+            for (int i = 0; d.size() > 1 && i < try_remove.size(); i++){
+                int index = reset + i;
+                if (index >= try_remove.size())
+                    index -= try_remove.size();
+                Sig elem  = try_remove[index];
 
-                if (!repeat) 
-                    break;
-                else if (tip.verbosity >= 3)
-                    printf("r");
+                if (find(d, elem)){
+                    Clause cand = d - elem;
+                    cls_generalizations++;
+                    if (step.prove(cand, e) && init.prove(cand, e, d)){
+                        reset = index;
+                        i     = 0;
+                        if (tip.verbosity >= 3) printf(".%d", d.size());
+                        assert(subsumes(d, cand));
+                    }else
+                        if (tip.verbosity >= 3) printf(".");
+                }
             }
             if (tip.verbosity >= 3) printf("\n");
             
