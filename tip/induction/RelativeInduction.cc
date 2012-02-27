@@ -111,6 +111,7 @@ namespace Tip {
             uint64_t             cls_total_size;
             uint64_t             cls_total_before;
             uint64_t             cls_total_removed;
+            uint64_t             cls_generalizations;
 
             uint64_t             cands_added;
             uint64_t             cands_fwdsub;
@@ -217,6 +218,7 @@ namespace Tip {
                                cls_total_size(0),
                                cls_total_before(0),
                                cls_total_removed(0),
+                               cls_generalizations(0),
 
                                cands_added        (0),
                                cands_fwdsub       (0),
@@ -303,6 +305,7 @@ namespace Tip {
                             printf("[generalize] cand = ");
                             printClause(cand);
                             printf("\n"); }
+                        cls_generalizations++;
                         if (step.prove(cand, e) && init.prove(cand, e, d)){
                             if (failed)
                                 repeat = true;
@@ -1203,8 +1206,10 @@ namespace Tip {
             printf("  Moved:             %"PRIu64"\n", cls_moved);
             printf("  Revived:           %"PRIu64"\n", cls_revived);
             printf("  Avg. size:         %.1f\n", cls_total_size / (double)cls_added);
-            printf("  Total Literals :   %"PRIu64" (%.1f%% deleted)\n", 
+            printf("  Total Literals:    %"PRIu64" (%.1f%% deleted)\n", 
                    cls_total_size, cls_total_removed * 100 / (double)cls_total_before);
+            printf("  Generalizations:   %"PRIu64" (%.1f / clause)\n", 
+                   cls_generalizations, cls_generalizations / (double)cls_added);
             printf("\n");
             printf("\n");
 
@@ -1213,7 +1218,7 @@ namespace Tip {
             printf("  Forward subsumed:  %"PRIu64"\n", cands_fwdsub);
             printf("  Revived:           %"PRIu64"\n", cands_revived);
             printf("  Avg. size:         %.1f\n", cands_total_size / (double)cands_added);
-            printf("  Total Literals :   %"PRIu64" (%.1f%% deleted)\n", 
+            printf("  Total Literals:    %"PRIu64" (%.1f%% deleted)\n", 
                    cands_total_size, cands_total_removed * 100 / (double)(tip.flps.size() * cands_added));
             printf("\n");
 
