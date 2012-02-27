@@ -93,7 +93,7 @@ void removeUnusedLogic(TipCirc& tip)
 
     mmap.growTo(tip.main.lastGate(), sig_Undef);
     for (GateIt git = tip.main.begin0(); git != tip.main.end(); ++git)
-        if (used.has(*git))
+        if (used.has(*git)){
             if (type(*git) == gtype_Const)
                 mmap[*git] = mkSig(*git);
             else if (type(*git) == gtype_And){
@@ -105,6 +105,7 @@ void removeUnusedLogic(TipCirc& tip)
                 assert(type(*git) == gtype_Inp);
                 mmap[*git] = copy.main.mkInp(tip.main.number(*git));
             }
+        }
 
     //--------------------------------------------------------------------------
     // Copy used parts of reset circuit and used flops:

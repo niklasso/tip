@@ -96,7 +96,7 @@ namespace Tip {
                 val[tip.flps[i]] = prev[i];
 
             for (GateIt git = tip.main.begin0(); git != tip.main.end(); ++git)
-                if (val[*git] == l_Undef)
+                if (val[*git] == l_Undef){
                     if (*git == gate_True)
                         val[*git] = l_True;
                     else if (type(*git) == gtype_And){
@@ -104,6 +104,7 @@ namespace Tip {
                         Sig y = tip.main.rchild(*git);
                         val[*git] = (val[gate(x)] ^ sign(x)) && (val[gate(y)] ^ sign(y));
                     }
+                }
 
             // printf("circuit: ");
             // for (GateIt git = tip.main.begin0(); git != tip.main.end(); ++git)

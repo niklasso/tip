@@ -1013,7 +1013,7 @@ namespace Tip {
                     cls_total_before  += sc->size();
                     cls_total_removed += sc->size() - minimized.size();
 
-                    if (bound > 0)
+                    if (bound > 0){
                         // Handle restarts:
                         if (restart_cnt == bound){
                             // printf("[proveRec] restart (bound = %d)\n", bound);
@@ -1023,6 +1023,7 @@ namespace Tip {
                             return true;
                         }else
                             restart_cnt++;
+                    }
                     
                     if (addClause(minimized)){
                         extractInvariant();
