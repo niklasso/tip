@@ -290,59 +290,33 @@ namespace Tip {
             Clause   e;
             scheduleGeneralizeOrder(c, try_remove);
 
-            if (tip.verbosity >= 4){
-                printf("[generalize] begin d = ");
-                printClause(d);
-                printf("\n"); }
             for (unsigned tries = 0; tries < max_gen_tries; tries++){
                 bool     repeat      = false;
                 bool     failed      = false;
-                unsigned size_before = d.size();
                 for (int i = 0; d.size() > 1 && i < try_remove.size(); i++)
                     if (find(d, try_remove[i])){
                         Clause cand = d - try_remove[i];
-                        if (tip.verbosity >= 4){
-                            printf("[generalize] cand = ");
-                            printClause(cand);
-                            printf("\n"); }
                         cls_generalizations++;
                         if (step.prove(cand, e) && init.prove(cand, e, d)){
+                            if (tip.verbosity >= 3) printf(".%d", d.size());
                             if (failed)
                                 repeat = true;
                             assert(subsumes(d, cand));
-                            if (tip.verbosity >= 4){
-                                printf("[generalize] refine d = ");
-                                printClause(d);
-                                printf("\n"); }
-                        }else
+                        }else{
                             failed = true;
+                            if (tip.verbosity >= 3) printf(".");
+                        }
                     }
 
-#if 0
-                static int total = 0;
-                static int skipped = 0;
-
-                total++;
-                if (!repeat)
-                    skipped++;
-
-                if (!repeat)
-                    printf("[generalize] retry skipped (%4.1f %%).\n", skipped*100 / (double)total);
-#endif
-
-                if (tip.verbosity >= 2 && tries > 0 && d.size() < size_before)
-                    printf("[generalize] retry %d at cycle %d shrunk with %d                     \n", 
-                           tries, d.cycle, size_before - d.size());
-
-                if (!repeat) break;
+                if (!repeat) 
+                    break;
+                else if (tip.verbosity >= 3)
+                    printf("r");
             }
+            if (tip.verbosity >= 3) printf("\n");
             
             assert(subsumes(d, c));
             c = d;
-            if (tip.verbosity >= 4){
-                printf("[generalize] done c = ");
-                printClause(c);
-                printf("\n");}
             // assert(init.prove(c, c, e));
             // assert(step.prove(c, e));
         }
@@ -356,32 +330,14 @@ namespace Tip {
             Clause   empty;
             scheduleGeneralizeOrder(c, try_remove);
 
-            if (tip.verbosity >= 4){
-                printf("[generalizeInit] begin d = ");
-                printClause(d);
-                printf("\n"); }
-
             for (int i = 0; d.size() > 1 && i < try_remove.size(); i++)
                 if (find(d, try_remove[i])){
                     Clause cand = d - try_remove[i];
-                    if (tip.verbosity >= 4){
-                        printf("[generalizeInit] cand = ");
-                        printClause(cand);
-                        printf("\n"); }
-                    if (init.prove(cand, empty, d)){
+                    if (init.prove(cand, empty, d))
                         assert(subsumes(d, cand));
-                        if (tip.verbosity >= 4){
-                            printf("[generalizeInit] refine d = ");
-                            printClause(d);
-                            printf("\n"); }
-                    }
                 }
             assert(subsumes(d, c));
             c = d;
-            if (tip.verbosity >= 4){
-                printf("[generalizeInit] done c = ");
-                printClause(c);
-                printf("\n");}
         }
 
 
@@ -403,6 +359,9 @@ namespace Tip {
                 check(init.prove(*c, yes_step, yes_init));
                 assert(subsumes(yes_step, yes_init));
                 yes_step = yes_init;
+
+                if (tip.verbosity >= 3) printf("[generalize] %d.%d", c->size(), yes_step.size());
+
 #ifdef GENERALIZE_THEN_PUSH
                 generalize(yes_step);
 #endif
@@ -1166,7 +1125,7 @@ namespace Tip {
 
         void Trip::printStats(unsigned curr_cycle, bool newline)
         {
-            if (tip.verbosity >= 2 || (newline && tip.verbosity >= 1)){
+            if (tip.verbosity == 2 || (newline && tip.verbosity >= 1)){
                 // Calculate unknown properties:
                 unsigned n_safes = 0, n_lives = 0;
                 for (SafeProp p = 0; p < tip.safe_props.size(); p++)
@@ -1183,11 +1142,11 @@ namespace Tip {
                 }
                 printf(" (%d) = %d, time = %.1f s", n_inv, n_total, cpu_time);
                 printf(", #safes=%d, #lives=%d", n_safes, n_lives);
-                printf(newline || tip.verbosity >= 3 ? "\n" : "\r");
+                printf(newline ? "\n" : "\r");
                 fflush(stdout);
             }
-            
-            if (tip.verbosity >= 3){
+
+            if (newline && tip.verbosity >= 3){
                 printf("[rip-stats] #clauses=%d, depth=%d\n", n_total, size());
                 init.printStats();
                 prop.printStats();
@@ -1291,7 +1250,7 @@ namespace Tip {
 #ifdef VERIFY_INVARIANT
                 trip.verifyInvariant();
 #endif
-                if (tip.verbosity >= 3){
+                if (tip.verbosity >= 4){
                     printf("[relativeInduction] invariant:\n");
                     trip.printInvariant(); }
                 break;
