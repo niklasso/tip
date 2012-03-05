@@ -49,13 +49,6 @@ namespace Tip {
             return pow(y, seq);
         }
 
-        struct EventCounter {
-            unsigned k;
-            Sig      q;
-            Sig      h;
-            //EventCounter() : k(0), x(sig_True){}
-        };
-
         //===================================================================================================
         // Temporal Relative Induction Prover:
 
@@ -68,6 +61,9 @@ namespace Tip {
         IntOption  opt_max_gen_tries("RIP", "rip-gen-tries","Max number of tries in clause generalization", 32);
         IntOption  opt_live_enc     ("RIP", "rip-live-enc", "Incremental liveness encoding", 0, IntRange(0,2));
         IntOption  opt_cnf_level    ("RIP", "rip-cnf", "Effort level for CNF simplification (0-2)", 1, IntRange(0,2));
+        IntOption  opt_pdepth       ("RIP", "rip-pdepth", "Depth of property instance.", 1, IntRange(0,INT32_MAX));
+        BoolOption opt_use_ind      ("RIP", "rip-use-ind", "Use property in induction hypothesis", false);
+        BoolOption opt_use_uniq     ("RIP", "rip-use-uniq", "Use unique state induction", false);
 
 
         class Trip {
@@ -88,13 +84,13 @@ namespace Tip {
             SMap<vec<Clause*> >  bwd_occurs;
             SMap<vec<Clause*> >  fwd_occurs;
 
+            // Liveness to safety mapping:
+            vec<EventCounter>    event_cnts;
+
             // Solver data: Should be rederivable from only independent data at any time:
             InitInstance         init;
             PropInstance         prop;
             StepInstance         step;
-
-            // Liveness to safety mapping:
-            vec<EventCounter>    event_cnts;
 
             // Options:
             bool                 fwd_revive;
@@ -206,7 +202,12 @@ namespace Tip {
             void             printInvariant  ();
             void             verifyInvariant ();
 
-            Trip(TipCirc& t) : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), init(t, opt_cnf_level), prop(t, F, opt_cnf_level), step(t, F, opt_cnf_level), 
+            Trip(TipCirc& t, unsigned prop_depth)
+                             : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), 
+
+                               init(t, opt_cnf_level),
+                               prop(t, F, F_inv, event_cnts, opt_cnf_level, prop_depth, opt_use_ind, opt_use_uniq),
+                               step(t, F, opt_cnf_level), 
 
                                fwd_revive   (opt_fwd_revive),
                                bwd_revive   (opt_bwd_revive),
@@ -1172,7 +1173,12 @@ namespace Tip {
                     lbool prop_res = l_False;
                     do {
                         // printf("[decideCycle] checking liveness property %d in cycle %d\n", p, size());
+                        bool use_ind = prop.use_ind;
+                        if (prop.depth >= size())
+                            prop.use_ind = false;
                         prop_res = proveProp(~event_cnts[p].q, pred);
+                        prop.use_ind = use_ind;
+
                         if (prop_res == l_False){
                             cands_added++;
                             cands_total_size    += pred->size();
@@ -1313,12 +1319,12 @@ namespace Tip {
     void relativeInduction(TipCirc& tip, RipBmcMode bmc_mode)
     {
         double    time_before = cpuTime();
-        Trip      trip(tip);
+        Trip      trip(tip, opt_pdepth);
         BasicBmc* bmc = new BasicBmc(tip);
 
         // Necessary BMC for relative induction to be sound:
         // TODO: shrink the number of cycles since the initial instance doesn't unroll?
-        for (int i = 0; !bmc->done() && i < 2; i++){
+        for (int i = 0; !bmc->done() && i < opt_pdepth; i++){
             bmc->unrollCycle();
             bmc->decideCycle();
             bmc->printStats ();

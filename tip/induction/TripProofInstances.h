@@ -124,6 +124,13 @@ namespace Tip {
         bool  has(Lit l) const { return in_set.has(l) && in_set[l]; }
     };
 
+    struct EventCounter {
+        unsigned k;
+        Sig      q;
+        Sig      h;
+        //EventCounter() : k(0), x(sig_True){}
+    };
+
 
     //===================================================================================================
     class InitInstance {
@@ -161,13 +168,15 @@ namespace Tip {
     class PropInstance {
         const TipCirc&            tip;
         const vec<vec<Clause*> >& F;
+        const vec<Clause*>&       F_inv;
+        const vec<EventCounter>&  event_cnts;
         
-        Circ           uc;              // Unrolled circuit.
-        GMap<Sig>      umap[2];         // Map for circuit unrollings.
+        UnrolledCirc   uc;              // Unrolled circuit.
+        SimpSolver     *solver;
         Clausifyer<SimpSolver>
-                       cl;              // Clausifyer for unrolled circuit.
+                       *cl;             // Clausifyer for unrolled circuit.
 
-        SimpSolver     solver;
+        vec<vec<Sig> > needed_flops;    // Flops reachable from constraints or properties in each cycle.
         vec<Sig>       inputs;
         vec<Sig>       outputs;
 
@@ -175,18 +184,24 @@ namespace Tip {
         Lit            act_cnstrs;
         LitSet         lset;
         double         cpu_time;
-        int            cnf_level;  // Effort level for CNF simplification.
-        
-        void reset();
-        //lbool evaluate(const InstanceModel& model, Sig p);
-        Sig  unrollSig (Sig  x, unsigned cycle);
-        Sig  unrollGate(Gate g, unsigned cycle);
 
+        // Options:
+        int            cnf_level;  // Effort level for CNF simplification.
     public:
+        unsigned       depth;      // Depth of the unrolling.
+        bool           use_ind;    // Use property in induction hypothesis.
+    private:
+        bool           use_uniq;   // Use unique state induction.
+        
+        //lbool evaluate(const InstanceModel& model, Sig p);
+    public:
+        void reset       (unsigned new_depth);
+
         void clearClauses();
         void addClause   (const Clause& c);
         
-        PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, int cnf_level_);
+        PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_,
+                     int cnf_level_, int depth_, bool use_ind_, bool use_uniq_);
         ~PropInstance();
         
         lbool prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle);

@@ -123,6 +123,111 @@ void UnrollCirc2::operator()(GMap<Sig>& umap){
 }
 
 //=================================================================================================
+// UnrolledCirc:
+
+UnrolledCirc::UnrolledCirc(const TipCirc& t, bool ri) 
+    : tip(t), random_init(ri){}
+
+Sig UnrolledCirc::unroll(Gate g, unsigned cycle)
+{
+    // printf(" ... unrollGate (cycle=%d): ", cycle);
+    // printGate(g);
+    // printf("\n");
+    
+    umap.growTo(cycle+1);
+    umap[cycle].growTo(g, sig_Undef);
+    if (umap[cycle][g] != sig_Undef){
+        //printf(" ... got here cycle=%d (cache)\n", cycle);
+        return umap[cycle][g];
+    }
+
+    Sig ret = sig_Undef;
+    if (type(g) == gtype_And){
+        //printf(" ... got here cycle=%d (and)\n", cycle);
+        Sig xl = tip.main.lchild(g);
+        Sig xr = tip.main.rchild(g);
+        ret = mkAnd(unroll(xl, cycle), unroll(xr, cycle));
+//     }else if (type(g) == gtype_Inp && cycle > 0 && tip.flps.isFlop(g)){
+//         //printf(" ... got here cycle=%d (flop-next)\n", cycle);
+//         ret = unrollSig(tip.flps.next(g), cycle-1);
+    }else if (tip.flps.isFlop(g)){
+        if (cycle > 0)
+            ret = unroll(tip.flps.next(g), cycle-1);
+        else if (random_init)
+            ret = mkInp();
+        else
+            ret = copySig(tip.init, *this, tip.flps.init(g), imap);
+    }else if (type(g) == gtype_Inp){
+        ret = mkInp();
+        //printf(" ... got here cycle=%d (input)\n", cycle);
+        // if (tip.flps.isFlop(g))
+        //     inputs.push(mkSig(g));
+    }else{
+        //printf(" ... got here cycle=%d (const)\n", cycle);
+        assert(type(g) == gtype_Const);
+        ret = sig_True;
+    }
+
+    umap[cycle][g] = ret;
+    return ret;
+}
+
+void UnrolledCirc::extractUsedInputs(unsigned cycle, vec<Sig>& xs) const
+{
+    for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
+        Sig inp = lookup(*iit, cycle);
+        if (inp != sig_Undef)
+            xs.push(inp);
+    }
+}
+
+
+void UnrolledCirc::extractUsedFlops(unsigned cycle, vec<Sig>& xs) const
+{
+    for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
+        Sig flp = lookup(*flit, cycle);
+        if (flp != sig_Undef)
+            xs.push(flp);
+    }
+}
+
+
+void UnrolledCirc::unrollProperties(unsigned cycle, vec<Sig>& xs)
+{
+    unrollSafeProps(cycle, xs);
+    unrollLiveProps(cycle, xs);
+}
+
+
+void UnrolledCirc::unrollSafeProps(unsigned cycle, vec<Sig>& xs)
+{
+    for (SafeProp p = 0; p < tip.safe_props.size(); p++)
+        if (tip.safe_props[p].stat == pstat_Unknown)
+            xs.push(unroll(tip.safe_props[p].sig, cycle));
+}
+
+
+void UnrolledCirc::unrollLiveProps(unsigned cycle, vec<Sig>& xs)
+{
+    for (LiveProp p = 0; p < tip.live_props.size(); p++)
+        if (tip.live_props[p].stat == pstat_Unknown){
+            assert(tip.live_props[p].sigs.size() == 1);
+            xs.push(unroll(tip.live_props[p].sigs[0], cycle));
+        }
+}
+
+
+void UnrolledCirc::unrollConstraints(unsigned cycle, vec<vec<Sig> >& xs)
+{
+    for (unsigned i = 0; i < tip.cnstrs.size(); i++){
+        xs.push();
+        for (int j = 0; j < tip.cnstrs[i].size(); j++)
+            xs.last().push(unroll(tip.cnstrs[i][j], cycle));
+    }
+}
+
+
+//=================================================================================================
 // UnrollCnf: (sketch)
 
 void UnrollCnf::pinGate(Gate g)

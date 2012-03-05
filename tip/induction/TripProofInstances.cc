@@ -338,6 +338,23 @@ namespace Tip {
         }
 
 
+        void traceInputs(const TipCirc& tip, const LitSet& lset, const UnrolledCirc& uc, unsigned cycle, Clausifyer<SimpSolver>& cl, vec<vec<lbool> >& frames)
+        {
+            frames.push();
+            for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
+                if (tip.main.number(*iit) != UINT32_MAX){
+                    Gate inp = *iit;
+                    Sig  x   = uc.lookup(inp, cycle);
+                    frames.last().growTo(tip.main.number(inp)+1, l_Undef);
+                    if (x != sig_Undef){
+                        Lit l = cl.lookup(x);
+                        frames.last()[tip.main.number(inp)] = lset.has(var(l)) ^ sign(l);
+                    }else
+                        frames.last()[tip.main.number(inp)] = l_Undef;
+                }
+        }
+
+
         void getClause(const TipCirc& tip, const LitSet& lset, const GMap<Lit>& umapl, vec<Sig>& xs)
         {
             for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
@@ -357,6 +374,17 @@ namespace Tip {
                 if (val != l_Undef)
                     xs.push(mkSig(*flit, val == l_True));
             }
+        }
+
+        void getClause(const TipCirc& tip, const LitSet& lset, const UnrolledCirc& uc, unsigned cycle, Clausifyer<SimpSolver>& cl, vec<Sig>& xs)
+        {
+            for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit)
+                if (uc.lookup(*flit, cycle) != sig_Undef){
+                    Lit   l   = cl.lookup(uc.lookup(*flit, cycle));
+                    lbool val = lset.has(var(l)) ^ sign(l);
+                    if (val != l_Undef)
+                        xs.push(mkSig(*flit, val == l_True));
+                }
         }
     }
 
@@ -528,52 +556,10 @@ namespace Tip {
     //===================================================================================================
     // Implementation of PropInstance:
 
-    Sig PropInstance::unrollSig (Sig x, unsigned cycle){
-        return unrollGate(gate(x), cycle) ^ sign(x);
-    }
-
-    Sig PropInstance::unrollGate(Gate g, unsigned cycle)
-    {
-        // printf(" ... unrollGate (cycle=%d): ", cycle);
-        // printGate(g);
-        // printf("\n");
-
-        //assert(cycle < umap.size());
-        assert(cycle < 2);
-        umap[cycle].growTo(g, sig_Undef);
-        if (umap[cycle][g] != sig_Undef){
-            //printf(" ... got here cycle=%d (cache)\n", cycle);
-            return umap[cycle][g];
-        }
-
-        Sig ret = sig_Undef;
-        if (type(g) == gtype_And){
-            //printf(" ... got here cycle=%d (and)\n", cycle);
-            Sig xl = tip.main.lchild(g);
-            Sig xr = tip.main.rchild(g);
-            ret = uc.mkAnd(unrollSig(xl, cycle), unrollSig(xr, cycle));
-        }else if (type(g) == gtype_Inp && cycle > 0 && tip.flps.isFlop(g)){
-            //printf(" ... got here cycle=%d (flop-next)\n", cycle);
-            ret = unrollSig(tip.flps.next(g), cycle-1);
-        }else if (type(g) == gtype_Inp){
-            ret = uc.mkInp();
-            //printf(" ... got here cycle=%d (input)\n", cycle);
-            // if (tip.flps.isFlop(g))
-            //     inputs.push(mkSig(g));
-        }else{
-            //printf(" ... got here cycle=%d (const)\n", cycle);
-            assert(type(g) == gtype_Const);
-            ret = sig_True;
-        }
-
-        umap[cycle][g] = ret;
-        return ret;
-    }
-
     void PropInstance::clearClauses()
     {
-        solver.releaseVar(~act_cycle);
-        act_cycle = mkLit(solver.newVar());
+        solver->releaseVar(~act_cycle);
+        act_cycle = mkLit(solver->newVar());
     }
 
     void PropInstance::addClause(const Clause& c)
@@ -584,102 +570,251 @@ namespace Tip {
             if (c.cycle != cycle_Undef)
                 xs.push(~act_cycle);
             for (unsigned i = 0; i < c.size(); i++){
-                assert(cl.lookup(umap[0][gate(c[i])] ^ sign(c[i])) != lit_Undef);
-                xs.push(cl.lookup(umap[0][gate(c[i])] ^ sign(c[i])));
+                Sig x = uc.lookup(c[i], 0);
+                if (x == sig_Undef){
+                    x = uc.unroll(c[i], 0);
+                    inputs.push(x);
+                    cl->clausify(x);
+                }
+                xs.push(cl->lookup(x));
             }
-            solver.addClause(xs);
+            solver->addClause(xs);
         }
     }
 
 
-    void PropInstance::reset()
+    void PropInstance::reset(unsigned new_depth)
     {
+        depth = new_depth;
+
+        if (solver != NULL) delete solver;
+        if (cl != NULL)     delete cl;
+
+        solver = new SimpSolver();
+        cl     = new Clausifyer<SimpSolver>(uc, *solver);
+
+        needed_flops.clear();
+        inputs.clear();
+        outputs.clear();
+
         if (cnf_level == 0)
-            solver.eliminate(true);
+            solver->eliminate(true);
 
-        act_cycle  = mkLit(solver.newVar());
-        act_cnstrs = mkLit(solver.newVar());
-        solver.freezeVar(var(act_cycle));
-        solver.freezeVar(var(act_cnstrs));
+        act_cycle  = mkLit(solver->newVar());
+        act_cnstrs = mkLit(solver->newVar());
+        solver->freezeVar(var(act_cycle));
+        solver->freezeVar(var(act_cnstrs));
 
-        // Unroll proper number of steps:
-        UnrollCirc2            unroll(tip, uc); // Unroller-helper object.
-        unroll(umap[0]);
-        unroll(umap[1]);
+        vec<Sig>       props;
+        vec<vec<Sig> > cnstrs;
 
-        // Extract all needed references:
-        extractInputs     (tip, umap[0], cl, solver, inputs);
-        extractLiveProps  (tip, umap[0], cl, solver);
-        extractInputs     (tip, umap[1], cl, solver, inputs);
-        extractFlopIns    (tip, umap[0], cl, solver, inputs);
-        extractSafeProps  (tip, umap[1], cl, solver);
-        extractLiveProps  (tip, umap[1], cl, solver);
+        // Unroll constraints and liveness properties:
+        for (unsigned cycle = 0; cycle <= depth; cycle++){
+            uc.unrollConstraints(cycle, cnstrs);
+            uc.unrollLiveProps  (cycle, props);
+        }
 
-        // TMP: remove at some point. This is kept to keep identical behavior.
-        cl.clausify(gate_True);
+        // Unroll property in last frame:
+        uc.unrollSafeProps(depth, props);
 
-        if (tip.cnstrs.size() > 0){
-            extractConstraints(tip, umap[0], act_cnstrs, cl, solver, outputs);
-            extractConstraints(tip, umap[1], act_cnstrs, cl, solver, outputs);
-        }else
-            solver.addClause(act_cnstrs);
+        // Unroll previous event counters in last frame:
+        for (LiveProp p = 0; p < event_cnts.size(); p++)
+            if (tip.live_props[p].stat == pstat_Unknown)
+                props.push(uc.unroll(event_cnts[p].q, depth));
+
+        // Extract and unroll internal flops needed for unique state induction:
+        if (use_uniq){
+            for (unsigned i = 0; i <= depth; i++){
+                needed_flops.push();
+                for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
+                    Sig flp = uc.lookup(*flit, i);
+                    if (flp != sig_Undef)
+                        needed_flops.last().push(mkSig(*flit));
+                }
+                // printf("[reset] %d reachable in cycle %d: ", needed_flops.last().size(), i);
+                // printSigs(needed_flops.last());
+                // printf("\n");
+            }
+
+            SSet front;
+            for (int i = depth; i >= 0; i--){
+                for (int j = 0; j < needed_flops[i].size(); j++)
+                    front.insert(needed_flops[i][j]);
+                for (int j = 0; j < front.size(); j++)
+                    props.push(uc.unroll(front[j], i));
+            }            
+        }
+
+        if (use_ind){
+            // Unroll property in remaining frames:
+            for (unsigned cycle = 0; cycle < depth; cycle++)
+                uc.unrollSafeProps(cycle, props);
+
+            // Unroll previous event counters in remaining frames:
+            for (unsigned cycle = 0; cycle < depth; cycle++)
+                for (LiveProp p = 0; p < event_cnts.size(); p++)
+                    if (tip.live_props[p].stat == pstat_Unknown)
+                        props.push(uc.unroll(event_cnts[p].q, cycle));
+        }
+
+        // Extract inputs + flops used in unrolling:
+        for (unsigned cycle = 0; cycle <= depth; cycle++)
+            uc.extractUsedInputs(cycle, inputs);
+        uc.extractUsedFlops(0, inputs);
+
+        // Clausify constant gate:
+        cl->clausify(gate_True);
+
+        // Clausify and freeze used input variables:
+        for (int i = 0; i < inputs.size(); i++)
+            solver->freezeVar(var(cl->clausify(inputs[i])));
+
+        // Clausify and freeze constraint variables:
+        if (cnstrs.size() > 0){
+            for (unsigned cycle = 0; cycle <= depth; cycle++)
+                for (int i = 0; i < cnstrs.size(); i++){
+                    Sig x = cnstrs[i][0];
+                    Lit p = cl->clausify(x);
+                    solver->freezeVar(var(p));
+                    outputs.push(x);
+                    for (int j = 1; j < cnstrs[i].size(); j++){
+                        Sig y = cnstrs[i][j];
+                        Lit q = cl->clausify(y);
+                        solver->freezeVar(var(q));
+                        solver->addClause(~act_cnstrs, ~p, q);
+                        solver->addClause(~act_cnstrs, ~q, p);
+                        outputs.push(y);
+                    }
+                }
+        }
+        // else
+        //     solver->releaseVar(act_cnstrs);
+
+        for (int i = 0; i < props.size(); i++)
+            solver->freezeVar(var(cl->clausify(props[i])));
 
         // Simplify CNF:
         if (cnf_level >= 2){
-            solver.use_asymm = true;
-            solver.grow = 2;
+            solver->use_asymm = true;
+            solver->grow = 2;
         }
-        solver.eliminate(true);
-        solver.thaw();
+
+        //printf(" (before) #vars = %d, #clauses = %d\n", solver->nFreeVars(), solver->nClauses());
+        solver->eliminate(true);
+        solver->thaw();
+        //printf(" (after)  #vars = %d, #clauses = %d\n", solver->nFreeVars(), solver->nClauses());
+
+        // Add all previously existing clauses relevant to the prop-instance:
+        if (F.size() > 0)
+            for (int i = 0; i < F.last().size(); i++)
+                addClause(*F.last()[i]);
+
+        for (int i = 0; i < F_inv.size(); i++)
+            addClause(*F_inv[i]);
     }
 
 
     lbool PropInstance::prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle)
     {
         double   time_before = cpuTime();
-        Lit      l = cl.lookup(umap[1][gate(p)] ^ sign(p));
+        Lit      l = cl->lookup(uc.lookup(p, depth));
         vec<Lit> assumps;
         lbool    result;
         vec<Lit> inputs;
         for (int i = 0; i < this->inputs.size(); i++){
             Sig x = this->inputs[i];
-            assert(cl.lookup(x) != lit_Undef);
-            inputs.push(cl.lookup(x));
+            assert(cl->lookup(x) != lit_Undef);
+            inputs.push(cl->lookup(x));
         }
 
-        if (solver.solve(~l, act_cycle, act_cnstrs)){
-            assert(solver.modelValue(l) == l_False);
+        if (use_ind)
+            for (unsigned i = 0; i < depth; i++){
+                Sig x = uc.lookup(p, i);
+                assert(x != sig_Undef);
+                Lit l = cl->lookup(x);
+                assert(l != lit_Undef);
+                assumps.push(l);
+            }
+        assumps.push(~l);
+        assumps.push(act_cycle);
+        assumps.push(act_cnstrs);
+
+        //uint32_t conflicts_before = solver->conflicts;
+    retry:
+        if (solver->solve(assumps)){
+            assert(solver->modelValue(l) == l_False);
+
+            if (use_uniq){
+                for (int i = depth; i > 0; i--)
+                    for (int j = 0; j < i; j++){
+                        bool equal = true;
+                        for (int k = 0; equal && k < needed_flops[i].size(); k++){
+                            Sig f_i = uc.lookup(needed_flops[i][k], i);
+                            Sig f_j = uc.lookup(needed_flops[i][k], j);
+                            assert(f_i != sig_Undef);
+                            assert(f_j != sig_Undef);
+                            assert(cl->lookup(f_i) != lit_Undef);
+                            assert(cl->lookup(f_j) != lit_Undef);
+                            equal &= (cl->modelValue(f_i) == cl->modelValue(f_j));
+                        }
+
+                        if (equal){
+                            printf("[prove] equal states %d and %d!\n", j, i);
+
+                            vec<Lit> cls;
+                            for (int k = 0; equal && k < needed_flops[i].size(); k++){
+                                Lit l_i = cl->lookup(uc.lookup(needed_flops[i][k], i));
+                                Lit l_j = cl->lookup(uc.lookup(needed_flops[i][k], j));
+                                Lit q   = mkLit(solver->newVar());
+                                cls.push(q);
+
+                                solver->addClause(~act_cnstrs, ~q, ~l_i, ~l_j);
+                                solver->addClause(~act_cnstrs, ~q,  l_i,  l_j);
+                            }
+                            solver->addClause(cls);
+                            goto retry;
+                        }
+                    }
+            }
+
             // Found predecessor state to a bad state:
-            lset.fromModel(inputs, solver);
+            lset.fromModel(inputs, *solver);
             vec<Lit> shrink_roots;
             for (int i = 0; i < outputs.size(); i++){
-                assert(cl.lookup(outputs[i]) != lit_Undef);
-                shrink_roots.push(cl.lookup(outputs[i]));
+                assert(cl->lookup(outputs[i]) != lit_Undef);
+                shrink_roots.push(cl->lookup(outputs[i]));
             }
             shrink_roots.push(~l);
-            shrinkModelOnce(solver, lset, shrink_roots);
+            shrinkModelOnce(*solver, lset, shrink_roots);
 
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
-            traceInputs(tip, lset, umap[0], cl, frames);
-            traceInputs(tip, lset, umap[1], cl, frames);
-            getClause  (tip, lset, umap[0], cl, clause);
+            for (unsigned k = 0; k <= depth; k++)
+                traceInputs(tip, lset, uc, k, *cl, frames);
+            getClause  (tip, lset, uc, 0, *cl, clause);
 
             vec<Sig> dummy;
-            ScheduledClause* apa = new ScheduledClause(dummy,  cycle+1, frames[1], NULL);
-            assert(apa != NULL);
-            SharedRef<ScheduledClause> last(apa);
-            //SharedRef<ScheduledClause> last(new ScheduledClause(dummy,  cycle+1, frames[1], NULL));
-            SharedRef<ScheduledClause> pred(new ScheduledClause(clause, cycle,   frames[0], last));
-            //printf("[PropInstance::prove] last = %p, pred = %p\n", last, pred);
+            SharedRef<ScheduledClause> pred(NULL);
+            for (unsigned k = depth; k > 0; k--)
+                pred = SharedRef<ScheduledClause>(new ScheduledClause(dummy, cycle+k, frames[k], pred));
+            pred = SharedRef<ScheduledClause>(new ScheduledClause(clause, cycle, frames[0], pred));
+
             no     = pred;
             result = l_False;
-        }else if (!solver.solve(~l, act_cnstrs))
-            // Property is implied already by invariants:
-            result = l_True;
-        else
-            result = l_Undef;
+            //}else if (!solver->solve(~l, act_cnstrs))
+        }else{
+            assumps.pop();
+            assumps.pop();
+            assumps.push(act_cnstrs);
+            if (!solver->solve(assumps))
+                // Property is implied already by invariants:
+                result = l_True;
+            else
+                result = l_Undef;
+        }
         cpu_time += cpuTime() - time_before;
+
+        // printf("[prove] conflicts: %d\n", (int)solver->conflicts - conflicts_before);
 
         return result;
     }
@@ -687,34 +822,39 @@ namespace Tip {
 
     void PropInstance::extendLiveness(Gate f, Sig f_next)
     {
-        Sig x  = unrollSig(f_next, 1);
-        assert(x != sig_Undef);
-        cl.clausify(x);
+        Sig x = uc.unroll(f_next, depth);
+        cl->clausify(x);
 
-        Sig slask = unrollGate(f, 0);
-        Lit fl    = cl.clausify(slask);
-        //inputs.push(fl);
+        if (use_ind)
+            for (unsigned i = 0; i < depth; i++){
+                Sig x = uc.unroll(f_next, i);
+                cl->clausify(x);
+            }
+
+        Sig slask = uc.unroll(f, 0);
+        cl->clausify(slask);
         inputs.push(slask);
     }
 
-
-    PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, int cnf_level_)
-        : tip(t), F(F_), cl(uc, solver), act_cnstrs(lit_Undef), cpu_time(0), cnf_level(cnf_level_)
+    PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_,
+                               int cnf_level_, int depth_, bool use_ind_, bool use_uniq_)
+        : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0),
+          cnf_level(cnf_level_), depth(depth_), use_ind(use_ind_), use_uniq(use_uniq_)
     {
-        reset();
+        reset(depth_);
     }
 
 
     PropInstance::~PropInstance(){ }
 
-    uint64_t PropInstance::props (){ return solver.propagations; }
-    uint64_t PropInstance::solves(){ return solver.solves; }
+    uint64_t PropInstance::props (){ return solver->propagations; }
+    uint64_t PropInstance::solves(){ return solver->solves; }
     double   PropInstance::time  (){ return cpu_time; }
 
     void PropInstance::printStats()
     {
         printf("[prop-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
-               (double)solver.nFreeVars(), (double)solver.nClauses(), (double)solver.conflicts);
+               (double)solver->nFreeVars(), (double)solver->nClauses(), (double)solver->conflicts);
     }
 
     //===================================================================================================

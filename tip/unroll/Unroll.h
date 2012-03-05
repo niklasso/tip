@@ -61,6 +61,33 @@ public:
 };
 
 
+class UnrolledCirc : public Circ
+{
+    const TipCirc&  tip;
+    GMap<Sig>       imap;
+    vec<GMap<Sig> > umap;
+    bool            random_init;
+
+ public:
+    UnrolledCirc(const TipCirc& t, bool random_init = true);
+
+    Sig unroll      (Sig  x, unsigned cycle);
+    Sig unroll      (Gate g, unsigned cycle);
+    Sig lookup      (Sig  x, unsigned cycle) const;
+    Sig lookup      (Gate g, unsigned cycle) const;
+    Sig lookupInit  (Sig x)  const;
+    Sig lookupInit  (Gate g) const;
+
+    void unrollProperties  (unsigned cycle, vec<Sig>& xs);
+    void unrollSafeProps   (unsigned cycle, vec<Sig>& xs);
+    void unrollLiveProps   (unsigned cycle, vec<Sig>& xs);
+    void unrollConstraints (unsigned cycle, vec<vec<Sig> >& xs);
+
+    void extractUsedInputs (unsigned cycle, vec<Sig>& xs) const;
+    void extractUsedFlops  (unsigned cycle, vec<Sig>& xs) const;
+};
+
+
 class UnrollCnf
 {
 public:
@@ -108,6 +135,24 @@ void extractInput(const TipCirc& tip, const GMap<T>& m, vec<vec<T> >& frames, T 
             frames.last()[tip.main.number(inp)] = m[*iit];
         }
 }
+
+//=================================================================================================
+// Inline implementations:
+
+inline Sig UnrolledCirc::unroll(Sig  x, unsigned cycle){ return unroll(gate(x), cycle) ^ sign(x); }
+
+inline Sig UnrolledCirc::lookup(Gate g, unsigned cycle) const {
+    return g == gate_True ? sig_True :
+        (cycle < (unsigned)umap.size() && umap[cycle].has(g)) ? umap[cycle][g] : sig_Undef; }
+
+inline Sig UnrolledCirc::lookup(Sig  x, unsigned cycle) const {
+    Sig ret = lookup(gate(x), cycle);
+    return ret != sig_Undef ? ret ^ sign(x) : sig_Undef; }
+
+inline Sig UnrolledCirc::lookupInit(Gate g) const { return imap.has(g) ? imap[g] : sig_Undef; }
+inline Sig UnrolledCirc::lookupInit(Sig x)  const {
+    Sig ret = lookupInit(gate(x));
+    return ret != sig_Undef ? ret ^ sign(x) : sig_Undef; }
 
 
 //=================================================================================================
