@@ -29,6 +29,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 //#define VERIFY_SUBSUMPTION
 //#define VERIFY_INVARIANT
 
+
 namespace Tip {
 
     namespace {
@@ -387,7 +388,7 @@ namespace Tip {
             }else{
                 if (!step.prove(*c, yes_step, no, c))
                     return false;
-                
+
                 //check(proveInit(*c, yes_init));
                 check(init.prove(*c, yes_step, yes_init));
                 assert(subsumes(yes_step, yes_init));
@@ -724,9 +725,9 @@ namespace Tip {
             Clause& c = cycle != cycle_Undef ? *F[cycle].last() : *F_inv.last();
             assert(c.size() > 0);
 
-             // printf("[addClause] c = ");
-             // printClause(c);
-             // printf("\n");
+            DEB(printf("[addClause] c = "));
+            DEB(printClause(c));
+            DEB(printf("\n"));
 
             assert(!fwdSubsumed(&c_));
             n_total++;
@@ -1108,6 +1109,12 @@ namespace Tip {
                 }else if (sc->cycle == 0)
                     return false;
                 else{
+                    if (pred->cycle > 0){
+                        Clause empty; empty.cycle = cycle_Undef;
+                        Clause slask;
+                        assert(init.prove(*pred, empty, slask));
+                    }
+
                     cands_added++;
                     cands_total_size    += pred->size();
                     cands_total_removed += tip.flps.size() - pred->size();

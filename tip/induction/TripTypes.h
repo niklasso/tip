@@ -23,6 +23,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "minisat/mtl/Sort.h"
 #include "tip/TipCirc.h"
 
+#if 0
+#define DEB(x) x
+#else
+#define DEB(x)
+#endif
+
 namespace Tip {
 
     typedef uint32_t Cycle;

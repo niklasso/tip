@@ -178,11 +178,16 @@ namespace Tip {
 
         vec<vec<Sig> > needed_flops;    // Flops reachable from constraints or properties in each cycle.
         vec<Sig>       inputs;
+        vec<Sig>       flops;
         vec<Sig>       outputs;
+        SSet           flops_set;
+        SSet           inputs_set;
+        SSet           outputs_set;
 
         Lit            act_cycle;
         Lit            act_cnstrs;
         LitSet         lset;
+        LitSet         lset2;
         double         cpu_time;
 
         // Options:
