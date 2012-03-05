@@ -687,8 +687,6 @@ namespace Tip {
                     }
                 }
         }
-        // else
-        //     solver->releaseVar(act_cnstrs);
 
         for (int i = 0; i < props.size(); i++)
             solver->freezeVar(var(cl->clausify(props[i])));
@@ -736,16 +734,16 @@ namespace Tip {
                 assumps.push(l);
             }
         assumps.push(~l);
-        assumps.push(act_cycle);
         assumps.push(act_cnstrs);
+        assumps.push(act_cycle);
 
         //uint32_t conflicts_before = solver->conflicts;
-    retry:
-        if (solver->solve(assumps)){
-            assert(solver->modelValue(l) == l_False);
-
-            if (use_uniq){
-                for (int i = depth; i > 0; i--)
+        bool sat;
+        for (bool trace_ok = false; !trace_ok; ){
+            sat = solver->solve(assumps);
+            if (sat && use_uniq){
+                // Check for equal states:
+                for (int i = depth; trace_ok && i > 0; i--)
                     for (int j = 0; j < i; j++){
                         bool equal = true;
                         for (int k = 0; equal && k < needed_flops[i].size(); k++){
@@ -772,11 +770,17 @@ namespace Tip {
                                 solver->addClause(~act_cnstrs, ~q,  l_i,  l_j);
                             }
                             solver->addClause(cls);
-                            goto retry;
+                            goto next;
                         }
                     }
             }
 
+            trace_ok = true;
+        next:;
+        }
+
+        if (sat){
+            assert(solver->modelValue(l) == l_False);
             // Found predecessor state to a bad state:
             lset.fromModel(inputs, *solver);
             vec<Lit> shrink_roots;
@@ -801,11 +805,9 @@ namespace Tip {
 
             no     = pred;
             result = l_False;
-            //}else if (!solver->solve(~l, act_cnstrs))
         }else{
+            // Take away 'act_cycle' and solve again:
             assumps.pop();
-            assumps.pop();
-            assumps.push(act_cnstrs);
             if (!solver->solve(assumps))
                 // Property is implied already by invariants:
                 result = l_True;
