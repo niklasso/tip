@@ -82,6 +82,7 @@ class UnrolledCirc : public Circ
     void unrollSafeProps   (unsigned cycle, vec<Sig>& xs);
     void unrollLiveProps   (unsigned cycle, vec<Sig>& xs);
     void unrollConstraints (unsigned cycle, vec<vec<Sig> >& xs);
+    void unrollFlopsNext   (unsigned cycle, vec<Sig>& xs);
 
     void extractUsedInputs (unsigned cycle, vec<Sig>& xs) const;
     void extractUsedFlops  (unsigned cycle, vec<Sig>& xs) const;

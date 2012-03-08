@@ -27,32 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 namespace Tip {
 
     //===================================================================================================
-    // Helper class, should maybe be internal later:
-    class InstanceModel {
-        LMap<char> true_map;
-        vec<Lit>   inputs;
-
-    public:
-        InstanceModel(const vec<Lit>& inps, const SimpSolver& s)
-            {
-                for (int i = 0; i < inps.size(); i++){
-                    assert(s.modelValue(inps[i]) != l_Undef);
-                    inputs.push(inps[i] ^ (s.modelValue(inps[i]) == l_False));
-                }
-            }
-        InstanceModel(const vec<Lit>& inps){ copy(inps, inputs); }
-
-        int   size      ()       const { return inputs.size(); }
-        Lit   operator[](int i)  const { return inputs[i]; }
-        void  copyTo    (vec<Lit>& out) const { inputs.copyTo(out); }
-
-        lbool value     (Gate g, const GMap<Lit>& umap) const
-        {
-            // TODO: naive implementation for now.
-            return find(inputs, umap[g]) ? l_True : find(inputs, ~umap[g]) ? l_False : l_Undef; 
-        }
-    };
-
+    // Helpers:
 
     class LitSet {
         LMap<char> in_set;
@@ -180,25 +155,22 @@ namespace Tip {
         vec<Sig>       inputs;
         vec<Sig>       flops;
         vec<Sig>       outputs;
+
+        // Reusable temporaries:
         SSet           flops_set;
         SSet           inputs_set;
         SSet           outputs_set;
 
         Lit            act_cycle;
         Lit            act_cnstrs;
-        LitSet         lset;
-        LitSet         lset2;
         double         cpu_time;
 
         // Options:
         int            cnf_level;  // Effort level for CNF simplification.
-    public:
-        unsigned       depth;      // Depth of the unrolling.
+        unsigned       depth_;     // Depth of the unrolling.
         bool           use_ind;    // Use property in induction hypothesis.
-    private:
         bool           use_uniq;   // Use unique state induction.
         
-        //lbool evaluate(const InstanceModel& model, Sig p);
     public:
         void reset       (unsigned new_depth);
 
@@ -216,6 +188,7 @@ namespace Tip {
         uint64_t props();
         uint64_t solves();
         double   time();
+        unsigned depth();
 
         void printStats();
     };
@@ -225,30 +198,37 @@ namespace Tip {
     class StepInstance {
         const TipCirc&            tip;
         const vec<vec<Clause*> >& F;
+        const vec<Clause*>&       F_inv;
+        const vec<EventCounter>&  event_cnts;
         
-        SimpSolver     solver;
-        Clausifyer<SimpSolver> cl;
-        GMap<Sig>      umap;
-        Gate           prev_lastgate;
+        UnrolledCirc   uc;              // Unrolled circuit.
+        SimpSolver     *solver;
+        Clausifyer<SimpSolver>
+                       *cl;             // Clausifyer for unrolled circuit.
+
         vec<Sig>       inputs;
+        vec<Sig>       flops;
         vec<Sig>       outputs;
+
+        // Reusable temporaries:
+        SSet           flops_set;
+        SSet           inputs_set;
+        SSet           outputs_set;
 
         vec<Lit>       activate;
         vec<unsigned>  cycle_clauses;
         Lit            act_cnstrs;
-        LitSet         lset;
         double         cpu_time;
         int            cnf_level;  // Effort level for CNF simplification.
         
         void reset();
-        void evaluate(vec<Sig>& clause);
         
     public:
         void addClause(const Clause& c);
 
         void resetCycle(unsigned cycle, unsigned num_clauses);
 
-        StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, int cnf_level_);
+        StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, int cnf_level_);
         ~StepInstance();
         
         bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);

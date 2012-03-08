@@ -102,6 +102,7 @@ namespace Tip {
             bool                 restart_luby;
             uint32_t             max_gen_tries;
             uint32_t             live_enc;
+            uint32_t             goal_depth;
 
             // Statistics:
             double               cpu_time;
@@ -203,12 +204,12 @@ namespace Tip {
             void             printInvariant  ();
             void             verifyInvariant ();
 
-            Trip(TipCirc& t, unsigned prop_depth)
+            Trip(TipCirc& t, unsigned prop_depth, bool start_at_depth_zero)
                              : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), 
 
                                init(t, opt_cnf_level),
-                               prop(t, F, F_inv, event_cnts, opt_cnf_level, prop_depth, opt_use_ind, opt_use_uniq),
-                               step(t, F, opt_cnf_level), 
+                               prop(t, F, F_inv, event_cnts, opt_cnf_level, start_at_depth_zero ? 0 : prop_depth, opt_use_ind, opt_use_uniq),
+                               step(t, F, F_inv, event_cnts, opt_cnf_level),
 
                                fwd_revive   (opt_fwd_revive),
                                bwd_revive   (opt_bwd_revive),
@@ -218,6 +219,7 @@ namespace Tip {
                                restart_luby (opt_restart_luby),
                                max_gen_tries(opt_max_gen_tries),
                                live_enc     (opt_live_enc),
+                               goal_depth   (prop_depth),
 
                                cpu_time  (0),
 
@@ -1180,11 +1182,7 @@ namespace Tip {
                     lbool prop_res = l_False;
                     do {
                         // printf("[decideCycle] checking liveness property %d in cycle %d\n", p, size());
-                        bool use_ind = prop.use_ind;
-                        if (prop.depth >= size())
-                            prop.use_ind = false;
                         prop_res = proveProp(~event_cnts[p].q, pred);
-                        prop.use_ind = use_ind;
 
                         if (prop_res == l_False){
                             cands_added++;
@@ -1218,7 +1216,10 @@ namespace Tip {
             // Check if all properties were resolved:
             if (unresolved == 0)
                 result = true;
-            else{
+            else if (prop.depth() < goal_depth){
+                prop.reset(prop.depth()+1);
+                result = false;
+            }else{
                 // At this point we know that all remaining properties are implied in cycle k+1. Expand
                 // a new frame and push clauses forward as much as possible:
                 F.push();
@@ -1326,16 +1327,16 @@ namespace Tip {
     void relativeInduction(TipCirc& tip, RipBmcMode bmc_mode)
     {
         double    time_before = cpuTime();
-        Trip      trip(tip, opt_pdepth);
+        Trip      trip(tip, opt_pdepth, true);
         BasicBmc* bmc = new BasicBmc(tip);
 
         // Necessary BMC for relative induction to be sound:
         // TODO: shrink the number of cycles since the initial instance doesn't unroll?
-        for (int i = 0; !bmc->done() && i < opt_pdepth; i++){
-            bmc->unrollCycle();
-            bmc->decideCycle();
-            bmc->printStats ();
-        }
+        // for (int i = 0; !bmc->done() && i < opt_pdepth; i++){
+        //     bmc->unrollCycle();
+        //     bmc->decideCycle();
+        //     bmc->printStats ();
+        // }
 
         // Take a few cheap extra BMC cycles:
         if (bmc_mode == ripbmc_Safe)

@@ -227,6 +227,13 @@ void UnrolledCirc::unrollConstraints(unsigned cycle, vec<vec<Sig> >& xs)
 }
 
 
+void UnrolledCirc::unrollFlopsNext(unsigned cycle, vec<Sig>& xs)
+{
+    for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit)
+        xs.push(unroll(tip.flps.next(*flit), cycle));
+}
+
+
 //=================================================================================================
 // UnrollCnf: (sketch)
 

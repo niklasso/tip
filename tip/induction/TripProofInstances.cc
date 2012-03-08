@@ -783,7 +783,7 @@ namespace Tip {
 
     void PropInstance::reset(unsigned new_depth)
     {
-        depth = new_depth;
+        depth_ = new_depth;
 
         if (solver != NULL) delete solver;
         if (cl != NULL)     delete cl;
@@ -808,22 +808,22 @@ namespace Tip {
         vec<vec<Sig> > cnstrs;
 
         // Unroll constraints and liveness properties:
-        for (unsigned cycle = 0; cycle <= depth; cycle++){
+        for (unsigned cycle = 0; cycle <= depth(); cycle++){
             uc.unrollConstraints(cycle, cnstrs);
             uc.unrollLiveProps  (cycle, props);
         }
 
         // Unroll property in last frame:
-        uc.unrollSafeProps(depth, props);
+        uc.unrollSafeProps(depth(), props);
 
         // Unroll previous event counters in last frame:
         for (LiveProp p = 0; p < event_cnts.size(); p++)
             if (tip.live_props[p].stat == pstat_Unknown)
-                props.push(uc.unroll(event_cnts[p].q, depth));
+                props.push(uc.unroll(event_cnts[p].q, depth()));
 
         // Extract and unroll internal flops needed for unique state induction:
         if (use_uniq){
-            for (unsigned i = 0; i <= depth; i++){
+            for (unsigned i = 0; i <= depth(); i++){
                 needed_flops.push();
                 for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
                     Sig flp = uc.lookup(*flit, i);
@@ -836,7 +836,7 @@ namespace Tip {
             }
 
             SSet front;
-            for (int i = depth; i >= 0; i--){
+            for (int i = depth(); i >= 0; i--){
                 for (int j = 0; j < needed_flops[i].size(); j++)
                     front.insert(needed_flops[i][j]);
                 for (int j = 0; j < front.size(); j++)
@@ -846,18 +846,18 @@ namespace Tip {
 
         if (use_ind){
             // Unroll property in remaining frames:
-            for (unsigned cycle = 0; cycle < depth; cycle++)
+            for (unsigned cycle = 0; cycle < depth(); cycle++)
                 uc.unrollSafeProps(cycle, props);
 
             // Unroll previous event counters in remaining frames:
-            for (unsigned cycle = 0; cycle < depth; cycle++)
+            for (unsigned cycle = 0; cycle < depth(); cycle++)
                 for (LiveProp p = 0; p < event_cnts.size(); p++)
                     if (tip.live_props[p].stat == pstat_Unknown)
                         props.push(uc.unroll(event_cnts[p].q, cycle));
         }
 
         // Extract inputs + flops used in unrolling:
-        for (unsigned cycle = 0; cycle <= depth; cycle++)
+        for (unsigned cycle = 0; cycle <= depth(); cycle++)
             uc.extractUsedInputs(cycle, inputs);
         //uc.extractUsedFlops(0, inputs);
         uc.extractUsedFlops(0, flops);
@@ -875,7 +875,7 @@ namespace Tip {
 
         // Clausify and freeze constraint variables:
         if (cnstrs.size() > 0){
-            for (unsigned cycle = 0; cycle <= depth; cycle++)
+            for (unsigned cycle = 0; cycle <= depth(); cycle++)
                 for (int i = 0; i < cnstrs.size(); i++){
                     Sig x = cnstrs[i][0];
                     Lit p = cl->clausify(x);
@@ -919,12 +919,12 @@ namespace Tip {
     lbool PropInstance::prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle)
     {
         double   time_before = cpuTime();
-        Lit      l = cl->lookup(uc.lookup(p, depth));
+        Lit      l = cl->lookup(uc.lookup(p, depth()));
         vec<Lit> assumps;
         lbool    result;
 
         if (use_ind)
-            for (unsigned i = 0; i < depth; i++){
+            for (unsigned i = 0; i < depth(); i++){
                 Sig x = uc.lookup(p, i);
                 assert(x != sig_Undef);
                 Lit l = cl->lookup(x);
@@ -941,7 +941,7 @@ namespace Tip {
             sat = solver->solve(assumps);
             if (sat && use_uniq){
                 // Check for equal states:
-                for (int i = depth; i > 0; i--)
+                for (int i = depth(); i > 0; i--)
                     for (int j = 0; j < i; j++){
                         bool equal = true;
                         for (int k = 0; equal && k < needed_flops[i].size(); k++){
@@ -984,19 +984,19 @@ namespace Tip {
             subModel(inputs,  *cl, inputs_set);
             subModel(flops,   *cl, flops_set);
             subModel(outputs, *cl, outputs_set);
-            outputs_set.insert(~uc.lookup(p, depth));
-            assert(cl->modelValue(~uc.lookup(p, depth)) == l_True);
+            outputs_set.insert(~uc.lookup(p, depth()));
+            assert(cl->modelValue(~uc.lookup(p, depth())) == l_True);
             shrinkModelOnce(*solver, *cl, inputs_set, flops_set, outputs_set);
 
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
-            for (unsigned k = 0; k <= depth; k++)
+            for (unsigned k = 0; k <= depth(); k++)
                 traceInputs(tip, inputs_set, uc, k, frames);
             getClause(tip, flops_set, uc, 0, clause);
 
             vec<Sig> dummy;
             SharedRef<ScheduledClause> pred(NULL);
-            for (unsigned k = depth; k > 0; k--)
+            for (unsigned k = depth(); k > 0; k--)
                 pred = SharedRef<ScheduledClause>(new ScheduledClause(dummy, cycle+k, frames[k], pred));
             pred = SharedRef<ScheduledClause>(new ScheduledClause(clause, cycle, frames[0], pred));
             DEB(printf("[PropInstance::prove] pred = "));
@@ -1024,24 +1024,24 @@ namespace Tip {
 
     void PropInstance::extendLiveness(Gate f, Sig f_next)
     {
-        Sig x = uc.unroll(f_next, depth);
+        Sig x = uc.unroll(f_next, depth());
         cl->clausify(x);
 
         if (use_ind)
-            for (unsigned i = 0; i < depth; i++){
+            for (unsigned i = 0; i < depth(); i++){
                 Sig x = uc.unroll(f_next, i);
                 cl->clausify(x);
             }
 
         Sig slask = uc.unroll(f, 0);
         cl->clausify(slask);
-        inputs.push(slask);
+        flops.push(slask);
     }
 
     PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_,
-                               int cnf_level_, int depth_, bool use_ind_, bool use_uniq_)
+                               int cnf_level_, int depth, bool use_ind_, bool use_uniq_)
         : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0),
-          cnf_level(cnf_level_), depth(depth_), use_ind(use_ind_), use_uniq(use_uniq_)
+          cnf_level(cnf_level_), depth_(depth), use_ind(use_ind_), use_uniq(use_uniq_)
     {
         reset(depth_);
     }
@@ -1052,6 +1052,7 @@ namespace Tip {
     uint64_t PropInstance::props (){ return solver->propagations; }
     uint64_t PropInstance::solves(){ return solver->solves; }
     double   PropInstance::time  (){ return cpu_time; }
+    unsigned PropInstance::depth (){ return depth_; }
 
     void PropInstance::printStats()
     {
@@ -1071,16 +1072,23 @@ namespace Tip {
         if (c.cycle != cycle_Undef){
             activate.growTo(c.cycle+1, lit_Undef);
             if (activate[c.cycle] == lit_Undef)
-                activate[c.cycle] = mkLit(solver.newVar());
+                activate[c.cycle] = mkLit(solver->newVar());
             xs.push(~activate[c.cycle]);
 
             cycle_clauses.growTo(c.cycle+1, 0);
             cycle_clauses[c.cycle]++;
         }
 
-        for (unsigned i = 0; i < c.size(); i++)
-            xs.push(cl.lookup(c[i]));
-        solver.addClause(xs);
+        for (unsigned i = 0; i < c.size(); i++){
+            Sig x = uc.lookup(c[i], 0);
+            if (x == sig_Undef){
+                x = uc.unroll(c[i], 0);
+                flops.push(x);
+                cl->clausify(x);
+            }
+            xs.push(cl->lookup(x));
+        }
+        solver->addClause(xs);
     }
 
 
@@ -1089,11 +1097,11 @@ namespace Tip {
         assert(cycle != cycle_Undef);
         if ((int)cycle < cycle_clauses.size() && (cycle_clauses[cycle] / 2) > num_clauses){
             // Disable all clauses added to this cycle:
-            solver.releaseVar(~activate[cycle]);
+            solver->releaseVar(~activate[cycle]);
             cycle_clauses[cycle] = 0;
 
             // Introduce new activation literal:
-            activate[cycle] = mkLit(solver.newVar());
+            activate[cycle] = mkLit(solver->newVar());
 
             // Re-add all clauses from this cycle:
             for (int i = 0; i < F[cycle].size(); i++)
@@ -1101,45 +1109,96 @@ namespace Tip {
                     addClause(*F[cycle][i]);
 
             // Force a solver simplify:
-            solver.simplify();
+            solver->simplify();
         }
     }
 
 
     void StepInstance::reset()
     {
+        if (solver != NULL) delete solver;
+        if (cl != NULL)     delete cl;
+
+        solver = new SimpSolver();
+        cl     = new Clausifyer<SimpSolver>(uc, *solver);
+
+        activate.clear();
+        cycle_clauses.clear();
+        inputs .clear();
+        outputs.clear();
+        flops  .clear();
+
         if (cnf_level == 0)
-            solver.eliminate(true);
+            solver->eliminate(true);
 
-        act_cnstrs = mkLit(solver.newVar());
-        solver.freezeVar(var(act_cnstrs));
+        act_cnstrs = mkLit(solver->newVar());
+        solver->freezeVar(var(act_cnstrs));
 
-        // FIXME: ugly, but will do for now.
-        umap.growTo(tip.main.lastGate(), sig_Undef);
-        for (GateIt git = tip.main.begin0(); git != tip.main.end(); ++git)
-            umap[*git] = mkSig(*git);
-        prev_lastgate = tip.main.lastGate();
+        vec<Sig>       props;
+        vec<vec<Sig> > cnstrs;
 
-        // Extract all needed references:
-        extractInputs   (tip, umap, cl, solver, inputs);
-        extractFlopIns  (tip, umap, cl, solver, inputs);
-        extractFlopOuts (tip, umap, cl, solver);
-        extractLiveProps(tip, umap, cl, solver);
+        // Unroll constraints and liveness properties:
+        uc.unrollConstraints(0, cnstrs);
+        uc.unrollFlopsNext  (0, props);
+        uc.unrollLiveProps  (0, props);
 
-        // TMP: remove at some point. This is kept to keep identical behavior.
-        cl.clausify(gate_True);
-        if (tip.cnstrs.size() > 0)
-            extractConstraints(tip, umap, act_cnstrs, cl, solver, outputs);
-        else
-            solver.addClause(act_cnstrs);
+        // Unroll previous event counters in last frame:
+        for (LiveProp p = 0; p < event_cnts.size(); p++)
+            if (tip.live_props[p].stat == pstat_Unknown)
+                props.push(uc.unroll(event_cnts[p].q, 0));
+
+        // Extract inputs + flops used in unrolling:
+        uc.extractUsedInputs(0, inputs);
+        uc.extractUsedFlops (0, flops);
+
+        // Clausify and freeze used input variables:
+        for (int i = 0; i < inputs.size(); i++)
+            solver->freezeVar(var(cl->clausify(inputs[i])));
+
+        // Clausify and freeze used flop variables:
+        for (int i = 0; i < flops.size(); i++)
+            solver->freezeVar(var(cl->clausify(flops[i])));
+
+        // Clausify and freeze constraint variables:
+        if (cnstrs.size() > 0){
+            for (int i = 0; i < cnstrs.size(); i++){
+                Sig x = cnstrs[i][0];
+                Lit p = cl->clausify(x);
+                solver->freezeVar(var(p));
+                outputs.push(x);
+                for (int j = 1; j < cnstrs[i].size(); j++){
+                    Sig y = cnstrs[i][j];
+                    Lit q = cl->clausify(y);
+                    solver->freezeVar(var(q));
+                    solver->addClause(~act_cnstrs, ~p, q);
+                    solver->addClause(~act_cnstrs, ~q, p);
+                    outputs.push(y);
+                }
+            }
+        }
+
+        for (int i = 0; i < props.size(); i++)
+            solver->freezeVar(var(cl->clausify(props[i])));
 
         // Simplify CNF:
         if (cnf_level >= 2){
-            solver.use_asymm = true;
-            solver.grow = 2;
+            solver->use_asymm = true;
+            solver->grow = 2;
         }
-        solver.eliminate(true);
-        solver.thaw();
+
+        //printf(" (before) #vars = %d, #clauses = %d\n", solver->nFreeVars(), solver->nClauses());
+        solver->eliminate(true);
+        solver->thaw();
+        //printf(" (after)  #vars = %d, #clauses = %d\n", solver->nFreeVars(), solver->nClauses());
+
+        // Add all previously existing clauses:
+        for (int i = 0; i < F.size(); i++)
+            for (int j = 0; j < F[i].size(); j++)
+                addClause(*F[i][j]);
+
+        for (int i = 0; i < F_inv.size(); i++)
+            addClause(*F_inv[i]);
+
     }
 
 
@@ -1152,30 +1211,22 @@ namespace Tip {
         assert(next == NULL || &c == (Clause*)&*next);
         assert(c.cycle > 0);
         double   time_before = cpuTime();
-        vec<Lit> shrink_root;
-        vec<Lit> inputs;
         vec<Lit> assumes;
-        //outputs.copyTo(shrink_root);
-        //this->inputs.copyTo(inputs);
-        for (int i = 0; i < outputs.size(); i++)
-            shrink_root.push(cl.lookup(outputs[i]));
-        for (int i = 0; i < this->inputs.size(); i++)
-            inputs.push(cl.lookup(this->inputs[i]));
+        vec<Lit> actives;
 
         // Assume proved clauses:
         if (c.cycle != cycle_Undef)
             for (int i = c.cycle-1; i < activate.size(); i++)
                 if (activate[i] != lit_Undef){
                     assumes.push(activate[i]);
-                    inputs .push(activate[i]);
+                    actives.push(activate[i]);
                 }
 
         // Assume negation of clause 'c' (outgoing):
         for (unsigned i = 0; i < c.size(); i++){
             Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
-            Lit l = cl.lookup(x);
+            Lit l = cl->lookup(uc.lookup(x, 0));
             assert(l != lit_Undef);
-            shrink_root.push(~l);
             assumes.push(~l);
         }
         // Assume constraints:
@@ -1184,53 +1235,63 @@ namespace Tip {
         // Try to satisfy clause 'c' (incoming):
         vec<Lit> cls;
         for (unsigned i = 0; i < c.size(); i++){
-            Lit l = cl.lookup(c[i]);
+            Lit l = cl->lookup(uc.lookup(c[i], 0));
             assert(l != lit_Undef);
-            solver.setPolarity(var(l), lbool(!sign(l)));
+            solver->setPolarity(var(l), lbool(!sign(l)));
             cls.push(l);
         }
 
-        if (next == NULL) solver.extend_model = false;
-        bool sat = solver.solve(assumes);
+        if (next == NULL) solver->extend_model = false;
+        bool sat = solver->solve(assumes);
 
         // Undo polarity preference:
         for (int i = 0; i < cls.size(); i++)
-            solver.setPolarity(var(cls[i]), l_Undef);
+            solver->setPolarity(var(cls[i]), l_Undef);
 
         if (sat){
             // Check if incoming clause was satisfied:
             bool clause_sat = false;
             for (int i = 0; i < cls.size() && !clause_sat; i++)
-                if (solver.modelValue(cls[i]) == l_True)
+                if (solver->modelValue(cls[i]) == l_True)
                     clause_sat = true;
 
             if (!clause_sat){
                 // Look for a new model where the clause is guaranteed to be true:
-                Lit trigg = mkLit(solver.newVar());
+                Lit trigg = mkLit(solver->newVar());
                 cls.push(~trigg);
-                solver.addClause(cls);
+                solver->addClause(cls);
                 assumes.push(trigg);
-                sat = solver.solve(assumes);
-                solver.releaseVar(~trigg);
+                sat = solver->solve(assumes);
+                solver->releaseVar(~trigg);
                 // printf("[StepInstance::prove] needed to add induction hypothesis => sat=%d\n", sat);
             }else{
                 // printf("[StepInstance::prove] did NOT need to add induction hypothesis.\n");
             }
         }
-        solver.extend_model = true;
+        solver->extend_model = true;
 
         bool result;
         if (sat){
             // Found a counter-example:
             if (next != NULL){
-                lset.fromModel(inputs, solver);
-                shrinkModelOnce(solver, lset, shrink_root);
+                subModel(inputs,  *cl, inputs_set);
+                subModel(flops,   *cl, flops_set);
+
+                for (unsigned i = 0; i < c.size(); i++){
+                    Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
+                    outputs.push(uc.lookup(x, 0));
+                }
+                
+                subModel(outputs, *cl, outputs_set);
+                outputs.shrink(c.size());
+
+                shrinkModelOnce(*solver, *cl, inputs_set, flops_set, outputs_set);
+
 
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
-
-                traceInputs     (tip, lset, umap, cl, frames);
-                getClause       (tip, lset, umap, cl, clause);
+                traceInputs(tip, inputs_set, uc, 0, frames);
+                getClause(tip, flops_set, uc, 0, clause);
 
                 SharedRef<ScheduledClause> pred(new ScheduledClause(clause, c.cycle-1, frames[0], next));
                 DEB(printf("[StepInstance::prove] pred = "));
@@ -1245,20 +1306,20 @@ namespace Tip {
             vec<Sig> subset;
             for (unsigned i = 0; i < c.size(); i++){
                 Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
-                Lit l = cl.lookup(x);
-                if (find(solver.conflict, l))
+                Lit l = cl->lookup(uc.lookup(x, 0));
+                if (solver->conflict.has(l))
                     subset.push(c[i]);
             }
             // What level was sufficient?
             unsigned k = cycle_Undef;
             if (c.cycle != cycle_Undef)
                 for (int i = c.cycle-1; i < activate.size(); i++)
-                    if (find(solver.conflict, ~activate[i])){
+                    if (solver->conflict.has(~activate[i])){
                         k = i+1;
                         break;
                     }
 
-            assert(solver.okay());
+            assert(solver->okay());
 
             // TODO: is this ok? When it doesn't hold it means that the clause didn't hold in the
             // previous cycle, and assuming the induction-hyptothesis was enough to derive the
@@ -1277,18 +1338,11 @@ namespace Tip {
 
     void StepInstance::extendLiveness(Gate f, Sig f_next)
     {
-        // Update identity 'umap' to contain all new gates:
-        umap.growTo(tip.main.lastGate(), sig_Undef);
-        for (GateIt git(tip.main, prev_lastgate); git != tip.main.end(); ++git)
-            umap[*git] = mkSig(*git);
-        prev_lastgate = tip.main.lastGate();
-
-        Sig x  = umap[gate(f_next)] ^ sign(f_next);
-        assert(x != sig_Undef);
-        cl.clausify(x);
-        Lit fl = cl.clausify(f);
-        assert(fl != lit_Undef);
-        inputs.push(mkSig(f));
+        Sig x  = uc.unroll(f_next, 0);
+        cl->clausify(x);
+        Sig slask = uc.unroll(f, 0);
+        cl->clausify(slask);
+        flops.push(slask);
     }
 
 
@@ -1298,8 +1352,8 @@ namespace Tip {
         return prove(c, yes, dummy);
     }
 
-    StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, int cnf_level_)
-        : tip(t), F(F_), cl(t.main, solver), cpu_time(0), cnf_level(cnf_level_)
+    StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, int cnf_level_)
+        : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0), cnf_level(cnf_level_)
     {
         reset();
     }
@@ -1307,14 +1361,14 @@ namespace Tip {
 
     StepInstance::~StepInstance(){ }
 
-    uint64_t StepInstance::props (){ return solver.propagations; }
-    uint64_t StepInstance::solves(){ return solver.solves; }
+    uint64_t StepInstance::props (){ return solver->propagations; }
+    uint64_t StepInstance::solves(){ return solver->solves; }
     double   StepInstance::time  (){ return cpu_time; }
 
     void StepInstance::printStats()
     {
         printf("[step-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
-               (double)solver.nFreeVars(), (double)solver.nClauses(), (double)solver.conflicts);
+               (double)solver->nFreeVars(), (double)solver->nClauses(), (double)solver->conflicts);
     }
 
 
