@@ -71,21 +71,26 @@ class UnrolledCirc : public Circ
  public:
     UnrolledCirc(const TipCirc& t, bool random_init = true);
 
-    Sig unroll      (Sig  x, unsigned cycle);
-    Sig unroll      (Gate g, unsigned cycle);
-    Sig lookup      (Sig  x, unsigned cycle) const;
-    Sig lookup      (Gate g, unsigned cycle) const;
-    Sig lookupInit  (Sig x)  const;
-    Sig lookupInit  (Gate g) const;
+    Sig  unroll            (Sig  x, unsigned cycle);
+    Sig  unroll            (Gate g, unsigned cycle);
 
     void unrollProperties  (unsigned cycle, vec<Sig>& xs);
     void unrollSafeProps   (unsigned cycle, vec<Sig>& xs);
     void unrollLiveProps   (unsigned cycle, vec<Sig>& xs);
     void unrollConstraints (unsigned cycle, vec<vec<Sig> >& xs);
+    void unrollFlops       (unsigned cycle, vec<Sig>& xs);
     void unrollFlopsNext   (unsigned cycle, vec<Sig>& xs);
 
+    Sig  lookup            (Sig  x, unsigned cycle) const;
+    Sig  lookup            (Gate g, unsigned cycle) const;
     void extractUsedInputs (unsigned cycle, vec<Sig>& xs) const;
     void extractUsedFlops  (unsigned cycle, vec<Sig>& xs) const;
+
+    Sig  lookupInit        (Sig x)  const;
+    Sig  lookupInit        (Gate g) const;
+
+    void extractUsedInitInputs
+                           (vec<Sig>& xs) const;
 };
 
 

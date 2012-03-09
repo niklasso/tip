@@ -181,6 +181,15 @@ void UnrolledCirc::extractUsedInputs(unsigned cycle, vec<Sig>& xs) const
     }
 }
 
+void UnrolledCirc::extractUsedInitInputs(vec<Sig>& xs) const
+{
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit){
+        Sig inp = lookupInit(*iit);
+        if (inp != sig_Undef)
+            xs.push(inp);
+    }
+}
+
 
 void UnrolledCirc::extractUsedFlops(unsigned cycle, vec<Sig>& xs) const
 {
@@ -224,6 +233,13 @@ void UnrolledCirc::unrollConstraints(unsigned cycle, vec<vec<Sig> >& xs)
         for (int j = 0; j < tip.cnstrs[i].size(); j++)
             xs.last().push(unroll(tip.cnstrs[i][j], cycle));
     }
+}
+
+
+void UnrolledCirc::unrollFlops(unsigned cycle, vec<Sig>& xs)
+{
+    for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit)
+        xs.push(unroll(*flit, cycle));
 }
 
 

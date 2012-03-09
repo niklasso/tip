@@ -235,6 +235,27 @@ namespace Tip {
         }
 
 
+        void traceResetInputs(const TipCirc& tip, const SSet& submodel, const UnrolledCirc& uc, vec<vec<lbool> >& frames)
+        {
+            frames.push();
+            for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd(); ++iit)
+                if (tip.init.number(*iit) != UINT32_MAX){
+                    Gate inp = *iit;
+                    Sig  x   = uc.lookupInit(inp);
+                    frames.last().growTo(tip.init.number(inp)+1, l_Undef);
+                    if (x != sig_Undef){
+                        if (submodel.has(x))
+                            frames.last()[tip.init.number(inp)] = l_True;
+                        else if (submodel.has(~x))
+                            frames.last()[tip.init.number(inp)] = l_False;
+                        else
+                            frames.last()[tip.init.number(inp)] = l_Undef;
+                    }else
+                        frames.last()[tip.init.number(inp)] = l_Undef;
+                }
+        }
+
+
         void getClause(const TipCirc& tip, const SSet& submodel, const UnrolledCirc& uc, unsigned cycle, vec<Sig>& xs)
         {
             xs.clear();
@@ -268,34 +289,41 @@ namespace Tip {
 
     void InitInstance::reset()
     {
+        if (solver != NULL) delete solver;
+        if (cl != NULL)     delete cl;
+
+        solver = new SimpSolver();
+        cl     = new Clausifyer<SimpSolver>(uc, *solver);
+
+        inputs .clear();
+
         if (cnf_level == 0)
-            solver.eliminate(true);
+            solver->eliminate(true);
 
-        umapl[0].clear();
-        umapl[0].growTo(tip.init.lastGate(), lit_Undef);
-        inputs.clear();
+        vec<Sig> used;
+        uc.unrollFlops(0, used);
+        uc.extractUsedInitInputs(inputs);
 
-        // Unroll proper number of steps:
-        Clausifyer<SimpSolver> cl(tip.init, solver);
+        // Clausify and freeze used input variables:
+        for (int i = 0; i < inputs.size(); i++)
+            solver->freezeVar(var(cl->clausify(inputs[i])));
 
-        // FIXME: ugly, but will do for now.
-        GMap<Sig> id(tip.init.lastGate(), sig_Undef);
-        for (GateIt git = tip.init.begin0(); git != tip.init.end(); ++git)
-            id[*git] = mkSig(*git);
-
-        // Extract all needed references:
-        extractResetInputs(tip, id, cl, solver, umapl[0], inputs);
-        extractFlopReset  (tip, id, cl, solver, umapl[0]);
-        umapl[0][gate_True] = cl.clausify(gate_True);
+        // Clausify and freeze used flop variables:
+        for (int i = 0; i < used.size(); i++)
+            solver->freezeVar(var(cl->clausify(used[i])));
 
         // Simplify CNF:
         if (cnf_level >= 2){
-            solver.use_asymm = true;
-            solver.grow = 2;
+            solver->use_asymm = true;
+            solver->grow = 2;
         }
-        solver.eliminate(true);
-        solver.thaw();
+
+        //printf(" (before) #vars = %d, #clauses = %d\n", solver->nFreeVars(), solver->nClauses());
+        solver->eliminate(true);
+        solver->thaw();
+        //printf(" (after)  #vars = %d, #clauses = %d\n", solver->nFreeVars(), solver->nClauses());
     }
+
 
     void InitInstance::reduceClause(Clause& c)
     {
@@ -303,8 +331,8 @@ namespace Tip {
         for (unsigned i = 0; i < c.size(); i++){
             SigLitPair p;
             p.x   = c[i];
-            Sig x = tip.flps.init(gate(p.x)) ^ sign(p.x);
-            p.l   = umapl[0][gate(x)] ^ sign(x);
+            Sig x = uc.unroll(p.x, 0);
+            p.l   = cl->lookup(x);
             slits.push(p);
         }
 
@@ -337,68 +365,101 @@ namespace Tip {
         // printClause(tip, c_);
         // printf("\n");
 
-        Clause c = c_;
-        reduceClause(c);
+        Clause cand_;
+        Clause rest;
 
-        // TODO: special-cases for trivially satisfiable/unsatisfiable situations?
+        if (bot.size() == 0){
+            cand_ = c_;
+        }else{
+            cand_ = bot;
+            rest  = c_ - bot;
+        }
+
+        reduceClause(cand_);
+        reduceClause(rest);
+
+        vec<Sig> cand;
+        for (unsigned i = 0; i < cand_.size(); i++) cand.push(cand_[i]);
 
         vec<Lit> assumes;
-        for (unsigned i = 0; i < c.size(); i++){
-            Sig x = tip.flps.init(gate(c[i])) ^ sign(c[i]);
-            Lit l = umapl[0][gate(x)] ^ sign(x);
+        bool     result;
+
+        // printf("[InitInstance::prove] begin.\n");
+
+        for (int i = 0; i < cand.size(); i++){
+            Sig x = uc.unroll(cand[i], 0);
+            Lit l = cl->lookup(x);
             assert(l != lit_Undef);
             assumes.push(~l);
         }
 
-        if (next == NULL)
-            solver.extend_model = false;
-        bool result;
+        {
+        retry:
+            // printf("[InitInstance::prove] cand = ");
+            // printSigs(cand);
+            // printf("\n");
+        
+            if (next == NULL)
+                solver->extend_model = false;
+            bool sat = solver->solve(assumes);
 
-        bool sat = solver.solve(assumes);
-
-        if (sat){
-            // Found a counter-example:
-            if (next != NULL){
-                lset.fromModel(inputs, solver);
-                // const vec<Lit>& shrink_roots = assumes;
-                // shrinkModelOnce(solver, lset, shrink_roots);
-
-                vec<vec<lbool> > frames;
-                vec<Sig>         clause;
-                traceResetInputs(tip, lset, umapl[0], frames);
-
-                vec<Sig>         dummy;
-                SharedRef<ScheduledClause> pred_rst(new ScheduledClause(dummy, 0, frames[0], next));
-
-                no = pred_rst;
-            }
-            result = false;
-        }else{
-            assert(solver.conflict.size() > 0);
-            // Proved the clause:
-
-            vec<Sig> subset;
-            lset.fromVec(solver.conflict.toVec());
-            for (unsigned i = 0; i < c.size(); i++){
-                Sig x = tip.flps.init(gate(c[i])) ^ sign(c[i]);
-                Lit l = umapl[0][gate(x)] ^ sign(x);
-                if (lset.has(l))
-                    subset.push(c[i]);
+            if (sat){
+                for (unsigned i = 0; i < rest.size(); i++){
+                    Sig x = uc.unroll(rest[i], 0);
+                    Lit l = cl->lookup(x);
+                    assert(solver->modelValue(l) != l_Undef);
+                    if (solver->modelValue(l) == l_True){
+                        cand.push(rest[i]);
+                        assumes.push(~l);
+                        goto retry;
+                    }
+                }
             }
 
-            yes    = bot + Clause(subset, 0);
-            result = true;
+            if (sat){
+                // Found a counter-example:
+                if (next != NULL){
+                    subModel(inputs,  *cl, inputs_set);
+                    //lset.fromModel(inputs, solver);
+                    // const vec<Lit>& shrink_roots = assumes;
+                    // shrinkModelOnce(solver, lset, shrink_roots);
+                    
+                    vec<vec<lbool> > frames;
+                    traceResetInputs(tip, inputs_set, uc, frames);
+                    frames.push();
+
+                    vec<Sig>         dummy;
+                    SharedRef<ScheduledClause> pred_rst(new ScheduledClause(dummy, 0, frames[0], next));
+                    
+                    no = pred_rst;
+                }
+                result = false;
+            }else{
+                assert(solver->conflict.size() > 0);
+                // Proved the clause:
+                
+                vec<Sig> subset;
+                for (int i = 0; i < cand.size(); i++){
+                    Sig x = uc.unroll(cand[i], 0);
+                    Lit l = cl->lookup(x);
+                    if (solver->conflict.has(l))
+                        subset.push(cand[i]);
+                }
+                
+                yes    = bot + Clause(subset, 0);
+                result = true;
+            }
         }
-        solver.extend_model = true;
-        cpu_time += cpuTime() - time_before;
 
+        solver->extend_model = true;
+        cpu_time += cpuTime() - time_before;
+        
         return result;
     }
 
-
     void InitInstance::extendLiveness()
     {
-        assert(umapl[0][gate_True] != lit_Undef);
+        //assert(umapl[0][gate_True] != lit_Undef);
     }
 
 
@@ -410,7 +471,7 @@ namespace Tip {
 
 
     InitInstance::InitInstance(const TipCirc& t, int cnf_level_) 
-        : tip(t), cpu_time(0), cnf_level(cnf_level_)
+        : tip(t), uc(t, false), solver(NULL), cl(NULL), cpu_time(0), cnf_level(cnf_level_)
     {
         reset();
     }
@@ -418,14 +479,14 @@ namespace Tip {
 
     InitInstance::~InitInstance(){ }
 
-    uint64_t InitInstance::props (){ return solver.propagations; }
-    uint64_t InitInstance::solves(){ return solver.solves; }
+    uint64_t InitInstance::props (){ return solver->propagations; }
+    uint64_t InitInstance::solves(){ return solver->solves; }
     double   InitInstance::time  (){ return cpu_time; }
 
     void InitInstance::printStats()
     {
         printf("[init-stats] vrs=%8.3g, cls=%8.3g, con=%8.3g\n", 
-               (double)solver.nFreeVars(), (double)solver.nClauses(), (double)solver.conflicts);
+               (double)solver->nFreeVars(), (double)solver->nClauses(), (double)solver->conflicts);
     }
     
     //===================================================================================================

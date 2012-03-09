@@ -343,6 +343,8 @@ namespace Tip {
                     if (step.prove(cand, e) && init.prove(cand, e, d)){
                         reset = index;
                         i     = 0;
+                        if (d.size() > e.size())
+                            printf("[generalize] init-added %d literals.\n", d.size() - e.size());
                         if (tip.verbosity >= 3) printf(".%d", d.size());
                         assert(subsumes(d, cand));
                     }else
@@ -393,6 +395,10 @@ namespace Tip {
 
                 //check(proveInit(*c, yes_init));
                 check(init.prove(*c, yes_step, yes_init));
+
+                if (yes_init.size() > yes_step.size())
+                    printf("[proveAndGeneralize] init-added %d literals.\n", yes_init.size() - yes_step.size());
+
                 assert(subsumes(yes_step, yes_init));
                 yes_step = yes_init;
 

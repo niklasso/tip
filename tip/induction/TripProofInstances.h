@@ -111,10 +111,16 @@ namespace Tip {
     class InitInstance {
         const TipCirc& tip;
         
-        SimpSolver     solver;
-        GMap<Lit>      umapl[2];
-        vec<Lit>       inputs;
-        LitSet         lset;
+        UnrolledCirc   uc;              // Unrolled circuit.
+        SimpSolver     *solver;
+        Clausifyer<SimpSolver>
+                       *cl;             // Clausifyer for unrolled circuit.
+
+        vec<Sig>       inputs;
+
+        // Reusable temporaries:
+        SSet           inputs_set;
+
         double         cpu_time;
         int            cnf_level;  // Effort level for CNF simplification.
         
