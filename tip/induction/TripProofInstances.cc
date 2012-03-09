@@ -66,74 +66,6 @@ namespace Tip {
             }
         }
 
-        void extractInputs(const TipCirc& tip, const GMap<Sig>& umap,
-                           Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl, vec<Lit>& xs)
-        {
-            for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
-                Sig inp = umap[*iit];
-                Lit lit = cl.clausify(inp);
-                umapl[*iit] = lit;
-                solver.freezeVar(var(lit));
-                xs.push(lit);
-            }
-        }
-
-        void extractFlopIns(const TipCirc& tip, const GMap<Sig>& umap,
-                            Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl, vec<Lit>& xs)
-        {
-            for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
-                Gate flp_in   = *flit;
-                Lit  lit_in   = cl.clausify(umap[flp_in]);
-                umapl[flp_in] = lit_in;
-                solver.freezeVar(var(lit_in));
-                xs.push(lit_in);
-            }
-        }
-
-        void extractFlopOuts(const TipCirc& tip, const GMap<Sig>& umap,
-                             Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl, vec<Lit>& xs)
-        {
-            for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
-                Sig  flp_out         = tip.flps.next(*flit);
-                Lit  lit_out         = cl.clausify(umap[gate(flp_out)] ^ sign(flp_out));
-                umapl[gate(flp_out)] = lit_out ^ sign(flp_out);
-                solver.freezeVar(var(lit_out));
-                xs.push(lit_out);
-            }
-        }
-
-        void extractInputs(const TipCirc& tip, const GMap<Sig>& umap,
-                           Clausifyer<SimpSolver>& cl, SimpSolver& solver, vec<Sig>& xs)
-        {
-            for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
-                Sig inp = umap[*iit];
-                Lit lit = cl.clausify(inp);
-                solver.freezeVar(var(lit));
-                xs.push(inp);
-            }
-        }
-
-        void extractFlopIns(const TipCirc& tip, const GMap<Sig>& umap,
-                            Clausifyer<SimpSolver>& cl, SimpSolver& solver, vec<Sig>& xs)
-        {
-            for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
-                Sig flp_in = umap[*flit];
-                Lit lit_in = cl.clausify(flp_in);
-                solver.freezeVar(var(lit_in));
-                xs.push(flp_in);
-            }
-        }
-
-        void extractFlopOuts(const TipCirc& tip, const GMap<Sig>& umap,
-                             Clausifyer<SimpSolver>& cl, SimpSolver& solver)
-        {
-            for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
-                Sig  flp_out = tip.flps.next(*flit);
-                Lit  lit_out = cl.clausify(umap[gate(flp_out)] ^ sign(flp_out));
-                solver.freezeVar(var(lit_out));
-            }
-        }
-
         void extractFlopReset(const TipCirc& tip, const GMap<Sig>& umap,
                               Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl)
         {
@@ -143,134 +75,6 @@ namespace Tip {
                 umapl[gate(flp_res)] = lit_res ^ sign(flp_res);
                 solver.freezeVar(var(lit_res));
             }
-        }
-
-
-        void extractSafeProps(const TipCirc& tip, const GMap<Sig>& umap,
-                              Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl)
-        {
-            for (SafeProp p = 0; p < tip.safe_props.size(); p++)
-                if (tip.safe_props[p].stat == pstat_Unknown){
-                    Sig prop          = tip.safe_props[p].sig;
-                    Lit lit           = cl.clausify(umap[gate(prop)] ^ sign(prop));
-                    umapl[gate(prop)] = lit ^ sign(prop);
-                    solver.freezeVar(var(lit));
-                }
-        }
-
-
-        void extractSafeProps(const TipCirc& tip, const GMap<Sig>& umap,
-                              Clausifyer<SimpSolver>& cl, SimpSolver& solver)
-        {
-            for (SafeProp p = 0; p < tip.safe_props.size(); p++)
-                if (tip.safe_props[p].stat == pstat_Unknown){
-                    Sig prop = tip.safe_props[p].sig;
-                    Lit lit  = cl.clausify(umap[gate(prop)] ^ sign(prop));
-                    solver.freezeVar(var(lit));
-                }
-        }
-
-
-        void extractLiveProps(const TipCirc& tip, const GMap<Sig>& umap,
-                              Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl)
-        {
-            for (LiveProp p = 0; p < tip.live_props.size(); p++)
-                if (tip.live_props[p].stat == pstat_Unknown){
-                    assert(tip.live_props[p].sigs.size() == 1);
-                    Sig prop          = tip.live_props[p].sigs[0];
-                    Lit lit           = cl.clausify(umap[gate(prop)] ^ sign(prop));
-                    umapl[gate(prop)] = lit ^ sign(prop);
-                    solver.freezeVar(var(lit));
-                }
-        }
-
-
-        void extractLiveProps(const TipCirc& tip, const GMap<Sig>& umap,
-                              Clausifyer<SimpSolver>& cl, SimpSolver& solver)
-        {
-            for (LiveProp p = 0; p < tip.live_props.size(); p++)
-                if (tip.live_props[p].stat == pstat_Unknown){
-                    assert(tip.live_props[p].sigs.size() == 1);
-                    Sig prop = tip.live_props[p].sigs[0];
-                    Lit lit  = cl.clausify(umap[gate(prop)] ^ sign(prop));
-                    solver.freezeVar(var(lit));
-                }
-        }
-
-
-        void extractConstraints(const TipCirc& tip, const GMap<Sig>& umap, Lit activate,
-                                Clausifyer<SimpSolver>& cl, SimpSolver& solver, GMap<Lit>& umapl, vec<Lit>& xs)
-        {
-            for (unsigned i = 0; i < tip.cnstrs.size(); i++){
-                Sig x = tip.cnstrs[i][0];
-                Lit p = cl.clausify(umap[gate(x)] ^ sign(x));
-                solver.freezeVar(var(p));
-                xs.push(p);
-                for (int j = 1; j < tip.cnstrs[i].size(); j++){
-                    Sig y = tip.cnstrs[i][j];
-                    Lit q = cl.clausify(umap[gate(y)] ^ sign(y));
-                    solver.freezeVar(var(q));
-                    solver.addClause(~activate, ~p, q);
-                    solver.addClause(~activate, ~q, p);
-                    xs.push(q);
-                }
-            }
-        }
-
-
-        void extractConstraints(const TipCirc& tip, const GMap<Sig>& umap, Lit activate,
-                                Clausifyer<SimpSolver>& cl, SimpSolver& solver, vec<Sig>& xs)
-        {
-            for (unsigned i = 0; i < tip.cnstrs.size(); i++){
-                Sig x  = tip.cnstrs[i][0];
-                Sig ux = umap[gate(x)] ^ sign(x);
-                Lit p = cl.clausify(ux);
-                solver.freezeVar(var(p));
-                xs.push(ux);
-                for (int j = 1; j < tip.cnstrs[i].size(); j++){
-                    Sig y  = tip.cnstrs[i][j];
-                    Sig uy = umap[gate(y)] ^ sign(y);
-                    Lit q  = cl.clausify(uy);
-                    solver.freezeVar(var(q));
-                    solver.addClause(~activate, ~p, q);
-                    solver.addClause(~activate, ~q, p);
-                    xs.push(uy);
-                }
-            }
-        }
-
-
-        void shrinkConflict(SimpSolver& s, LitSet& keep, vec<Lit>& try_remove)
-        {
-            vec<Lit> ass;
-            vec<Lit> smaller;
-            s.extend_model = false;
-
-            // Remove elements from 'try_remove' that already exists in 'keep':
-            int i,j;
-            for (i = j = 0; i < try_remove.size(); i++)
-                if (!keep.has(try_remove[i]))
-                    try_remove[j++] = try_remove[i];
-            try_remove.shrink(i - j);
-
-            while(try_remove.size() > 0){
-                keep.copyTo(ass);
-                for (int i = 0; i < try_remove.size()-1; i++)
-                    ass.push(try_remove[i]);
-
-                if (s.solve(ass)){
-                    keep.push(try_remove.last());
-                    try_remove.pop();
-                }else{
-                    smaller.clear();
-                    for (int i = 0; i < s.conflict.size(); i++)
-                        if (!keep.has(~s.conflict[i]))
-                            smaller.push(~s.conflict[i]);
-                    assert(smaller.size() < try_remove.size());
-                    smaller.moveTo(try_remove);
-                }
-            }
-            s.extend_model = true;
         }
 
         // (stolen from Solver.h)
@@ -302,11 +106,12 @@ namespace Tip {
 
         void shrinkModelOnce(SimpSolver& s, Clausifyer<SimpSolver>& cl,
                              const vec<Sig>& fixed, vec<Sig>& xs, const vec<Sig>& top,
-                             const vec<Lit>& fixed_lits)
+                             const vec<Lit>& fixed_lits, bool verbose = false)
         {
             // printf("[shrinkModelOnce] begin\n");
 
             int size_first = xs.size();
+#ifndef NDEBUG
             for (int i = 0; i < fixed.size(); i++)
                 assert(cl.modelValue(fixed[i]) == l_True);
 
@@ -315,6 +120,7 @@ namespace Tip {
 
             for (int i = 0; i < top.size(); i++)
                 assert(cl.modelValue(top[i]) == l_True);
+#endif
 
             // Simple variant for now:
             Lit      trigg = mkLit(s.newVar());
@@ -329,27 +135,8 @@ namespace Tip {
             for (int i = 0; i < fixed.size(); i++)
                 fix.push(cl.lookup(fixed[i]));
 
-#if 0
-            for (TrailIterator ti = s.trailBegin(); ti != s.trailEnd(); ++ti)
-                printf("  unit: %s%d\n", sign(*ti)?"-":"", var(*ti));
-            
-            for (ClauseIterator ci = s.clausesBegin(); ci != s.clausesEnd(); ++ci){
-                printf("  clause: ");
-                printLits(*ci);
-                printf("\n");
-            }
-
-            printf("[shrinkModelOnce2] clause = ");
-            for (int i = 0; i < clause.size(); i++)
-                printf("%s%d ", sign(clause[i])?"-":"", var(clause[i]));
-            printf("\n");
-
-            printf("[shrinkModelOnce2] fixed.size() = %d, xs.size() = %d, top.size() = %d\n", 
-                   fixed.size(), xs.size(), top.size());
-#endif
-
-            DEB(printf("[shrinkModelOnce2] %d", size_first));
-            DEB(fflush(stdout));
+            if (verbose)
+                printf("[shrinkModelOnce] %d", size_first);
 
             vec<Lit> assume;
             unsigned fails = 0;
@@ -372,33 +159,32 @@ namespace Tip {
                 out.copyTo(xs);
 
                 if (xs.size() < size_before){
-                    DEB(printf(".%d", xs.size()));
+                    if (verbose) printf(".%d", xs.size());
                 }else{
                     fails++;
-                    DEB(printf("x"));
+                    if (verbose) printf("x");
                 }
-                fflush(stdout);
             }
-            DEB(printf("\n"));
+            if (verbose) printf("\n");
 
             s.releaseVar(~trigg);
         }
 
         void shrinkModelOnce(SimpSolver& s, Clausifyer<SimpSolver>& cl,
-                             const vec<Sig>& fixed, vec<Sig>& xs, const vec<Sig>& top)
+                             const vec<Sig>& fixed, vec<Sig>& xs, const vec<Sig>& top, bool verbose = false)
         {
             vec<Lit> empty;
-            shrinkModelOnce(s, cl, fixed, xs, top, empty);
+            shrinkModelOnce(s, cl, fixed, xs, top, empty, verbose);
         }
 
 
         void shrinkModelOnce(SimpSolver& s, Clausifyer<SimpSolver>& cl,
-                             const SSet& fixed, SSet& xs, const SSet& top, const vec<Lit>& fixed_lits)
+                             const SSet& fixed, SSet& xs, const SSet& top, const vec<Lit>& fixed_lits, bool verbose = false)
         {
             // Copy the set 'xs':
             vec<Sig> ys; xs.toVec().copyTo(ys);
 
-            shrinkModelOnce(s, cl, fixed.toVec(), ys, top.toVec(), fixed_lits);
+            shrinkModelOnce(s, cl, fixed.toVec(), ys, top.toVec(), fixed_lits, verbose);
 
             // Copy back the reduced set 'ys':
             xs.clear();
@@ -408,42 +194,10 @@ namespace Tip {
 
 
         void shrinkModelOnce(SimpSolver& s, Clausifyer<SimpSolver>& cl,
-                             const SSet& fixed, SSet& xs, const SSet& top)
+                             const SSet& fixed, SSet& xs, const SSet& top, bool verbose = false)
         {
             vec<Lit> empty;
-            shrinkModelOnce(s, cl, fixed, xs, top, empty);
-        }
-
-
-        void shrinkModelOnce(SimpSolver& s, LitSet& xs, const vec<Lit>& top)
-        {
-            for (int i = 0; i < xs.size(); i++)
-                assert(s.modelValue(xs[i]) == l_True);
-
-            for (int i = 0; i < top.size(); i++)
-                assert(s.modelValue(top[i]) == l_True);
-
-            // Simple variant for now:
-            Lit      trigg = mkLit(s.newVar());
-            vec<Lit> clause;
-            for (int i = 0; i < top.size(); i++)
-                clause.push(~top[i]);
-            clause.push(~trigg);
-            s.addClause(clause);
-
-            vec<Lit> assume;
-            xs.copyTo(assume);
-            assume.push(trigg);
-            check(!s.solve(assume));
-
-            s.releaseVar(~trigg);
-
-            // Check 's.conflict' and remove literals not present there:
-            vec<Lit> out;
-            for (int i = 0; i < s.conflict.size(); i++)
-                if (xs.has(~s.conflict[i]))
-                    out.push(~s.conflict[i]);
-            xs.fromVec(out);
+            shrinkModelOnce(s, cl, fixed, xs, top, empty, verbose);
         }
 
 
@@ -456,49 +210,6 @@ namespace Tip {
                     Lit  l   = umapl[inp];
                     frames.last().growTo(tip.init.number(inp)+1, l_Undef);
                     frames.last()[tip.init.number(inp)] = lset.has(var(l)) ^ sign(l);
-                }
-        }
-
-
-        void traceInputs(const TipCirc& tip, const LitSet& lset, const GMap<Lit>& umapl, vec<vec<lbool> >& frames)
-        {
-            frames.push();
-            for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
-                if (tip.main.number(*iit) != UINT32_MAX){
-                    Gate inp = *iit;
-                    Lit  l   = umapl[inp];
-                    frames.last().growTo(tip.main.number(inp)+1, l_Undef);
-                    frames.last()[tip.main.number(inp)] = lset.has(var(l)) ^ sign(l);
-                }
-        }
-
-
-        void traceInputs(const TipCirc& tip, const LitSet& lset, const GMap<Sig>& umap, Clausifyer<SimpSolver>& cl, vec<vec<lbool> >& frames)
-        {
-            frames.push();
-            for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
-                if (tip.main.number(*iit) != UINT32_MAX){
-                    Gate inp = *iit;
-                    Lit  l   = cl.lookup(umap[inp]);
-                    frames.last().growTo(tip.main.number(inp)+1, l_Undef);
-                    frames.last()[tip.main.number(inp)] = lset.has(var(l)) ^ sign(l);
-                }
-        }
-
-
-        void traceInputs(const TipCirc& tip, const LitSet& lset, const UnrolledCirc& uc, unsigned cycle, Clausifyer<SimpSolver>& cl, vec<vec<lbool> >& frames)
-        {
-            frames.push();
-            for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit)
-                if (tip.main.number(*iit) != UINT32_MAX){
-                    Gate inp = *iit;
-                    Sig  x   = uc.lookup(inp, cycle);
-                    frames.last().growTo(tip.main.number(inp)+1, l_Undef);
-                    if (x != sig_Undef){
-                        Lit l = cl.lookup(x);
-                        frames.last()[tip.main.number(inp)] = lset.has(var(l)) ^ sign(l);
-                    }else
-                        frames.last()[tip.main.number(inp)] = l_Undef;
                 }
         }
 
@@ -520,40 +231,6 @@ namespace Tip {
                             frames.last()[tip.main.number(inp)] = l_Undef;
                     }else
                         frames.last()[tip.main.number(inp)] = l_Undef;
-                }
-        }
-
-
-
-        void getClause(const TipCirc& tip, const LitSet& lset, const GMap<Lit>& umapl, vec<Sig>& xs)
-        {
-            for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
-                Lit   l   = umapl[*flit];
-                lbool val = lset.has(var(l)) ^ sign(l);
-                if (val != l_Undef)
-                    xs.push(mkSig(*flit, val == l_True));
-            }
-        }
-
-
-        void getClause(const TipCirc& tip, const LitSet& lset, const GMap<Sig>& umap, Clausifyer<SimpSolver>& cl, vec<Sig>& xs)
-        {
-            for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit){
-                Lit   l   = cl.lookup(umap[*flit]);
-                lbool val = lset.has(var(l)) ^ sign(l);
-                if (val != l_Undef)
-                    xs.push(mkSig(*flit, val == l_True));
-            }
-        }
-
-        void getClause(const TipCirc& tip, const LitSet& lset, const UnrolledCirc& uc, unsigned cycle, Clausifyer<SimpSolver>& cl, vec<Sig>& xs)
-        {
-            for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit)
-                if (uc.lookup(*flit, cycle) != sig_Undef){
-                    Lit   l   = cl.lookup(uc.lookup(*flit, cycle));
-                    lbool val = lset.has(var(l)) ^ sign(l);
-                    if (val != l_Undef)
-                        xs.push(mkSig(*flit, val == l_True));
                 }
         }
 
@@ -683,8 +360,8 @@ namespace Tip {
             // Found a counter-example:
             if (next != NULL){
                 lset.fromModel(inputs, solver);
-                const vec<Lit>& shrink_roots = assumes;
-                shrinkModelOnce(solver, lset, shrink_roots);
+                // const vec<Lit>& shrink_roots = assumes;
+                // shrinkModelOnce(solver, lset, shrink_roots);
 
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
@@ -986,7 +663,7 @@ namespace Tip {
             subModel(outputs, *cl, outputs_set);
             outputs_set.insert(~uc.lookup(p, depth()));
             assert(cl->modelValue(~uc.lookup(p, depth())) == l_True);
-            shrinkModelOnce(*solver, *cl, inputs_set, flops_set, outputs_set);
+            shrinkModelOnce(*solver, *cl, inputs_set, flops_set, outputs_set, tip.verbosity >= 3);
 
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
@@ -1285,7 +962,7 @@ namespace Tip {
                 subModel(outputs, *cl, outputs_set);
                 outputs.shrink(c.size());
 
-                shrinkModelOnce(*solver, *cl, inputs_set, flops_set, outputs_set);
+                shrinkModelOnce(*solver, *cl, inputs_set, flops_set, outputs_set, tip.verbosity >= 3);
 
 
                 vec<vec<lbool> > frames;
