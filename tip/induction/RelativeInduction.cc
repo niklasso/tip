@@ -60,6 +60,7 @@ namespace Tip {
         IntOption  opt_restart      ("RIP", "rip-restart",  "Use this interval for rip-engine restarts (0=off)", 0);
         BoolOption opt_restart_luby ("RIP", "rip-restart-luby", "Use luby sequence for rip-engine restarts", false);
         IntOption  opt_max_gen_tries("RIP", "rip-gen-tries","Max number of tries in clause generalization", 32);
+        IntOption  opt_max_min_tries("RIP", "rip-min-tries","Max number of tries in model minimization", 32);
         IntOption  opt_live_enc     ("RIP", "rip-live-enc", "Incremental liveness encoding", 0, IntRange(0,2));
         IntOption  opt_cnf_level    ("RIP", "rip-cnf", "Effort level for CNF simplification (0-2)", 1, IntRange(0,2));
         IntOption  opt_pdepth       ("RIP", "rip-pdepth", "Depth of property instance.", 1, IntRange(0,INT32_MAX));
@@ -208,8 +209,8 @@ namespace Tip {
                              : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), 
 
                                init(t, opt_cnf_level),
-                               prop(t, F, F_inv, event_cnts, opt_cnf_level, start_at_depth_zero ? 0 : prop_depth, opt_use_ind, opt_use_uniq),
-                               step(t, F, F_inv, event_cnts, opt_cnf_level),
+                               prop(t, F, F_inv, event_cnts, opt_cnf_level, opt_max_min_tries, start_at_depth_zero ? 0 : prop_depth, opt_use_ind, opt_use_uniq),
+                               step(t, F, F_inv, event_cnts, opt_cnf_level, opt_max_min_tries),
 
                                fwd_revive   (opt_fwd_revive),
                                bwd_revive   (opt_bwd_revive),
@@ -343,8 +344,6 @@ namespace Tip {
                     if (step.prove(cand, e) && init.prove(cand, e, d)){
                         reset = index;
                         i     = 0;
-                        if (d.size() > e.size())
-                            printf("[generalize] init-added %d literals.\n", d.size() - e.size());
                         if (tip.verbosity >= 3) printf(".%d", d.size());
                         assert(subsumes(d, cand));
                     }else
@@ -395,9 +394,6 @@ namespace Tip {
 
                 //check(proveInit(*c, yes_init));
                 check(init.prove(*c, yes_step, yes_init));
-
-                if (yes_init.size() > yes_step.size())
-                    printf("[proveAndGeneralize] init-added %d literals.\n", yes_init.size() - yes_step.size());
 
                 assert(subsumes(yes_step, yes_init));
                 yes_step = yes_init;

@@ -104,11 +104,11 @@ namespace Tip {
         }
 
 
-        void shrinkModelOnce(SimpSolver& s, Clausifyer<SimpSolver>& cl,
-                             const vec<Sig>& fixed, vec<Sig>& xs, const vec<Sig>& top,
-                             const vec<Lit>& fixed_lits, bool verbose = false)
+        void shrinkModel(SimpSolver& s, Clausifyer<SimpSolver>& cl,
+                         const vec<Sig>& fixed, vec<Sig>& xs, const vec<Sig>& top,
+                         const vec<Lit>& fixed_lits, unsigned iters = 32, bool verbose = false)
         {
-            // printf("[shrinkModelOnce] begin\n");
+            // printf("[shrinkModel] begin\n");
 
             int size_first = xs.size();
 #ifndef NDEBUG
@@ -136,27 +136,29 @@ namespace Tip {
                 fix.push(cl.lookup(fixed[i]));
 
             if (verbose)
-                printf("[shrinkModelOnce] %d", size_first);
+                printf("[shrinkModel] %d", size_first);
 
             vec<Lit> assume;
             unsigned fails = 0;
-            for (int i = 0; fails < 2 && i < 32; i++){
+            for (uint32_t i = 0; ; i++){
                 int size_before = xs.size();
+
+                // Join the set of fixed literals + plus the current minimized set 'xs'. It is
+                // important to place 'xs' last as this increases the likelyhood of those literals
+                // being removed by the solver 'analyzeFinal()':
                 fix.copyTo(assume);
                 assume.push(trigg);
-                for (int i = 0; i < xs.size(); i++)
-                    assume.push(cl.lookup(xs[i]));
+                for (int j = 0; j < xs.size(); j++)
+                    assume.push(cl.lookup(xs[j]));
 
                 check(!s.solve(assume));
 
-                vec<Sig> out;
-                for (int i = 0; i < xs.size(); i++)
-                    if (s.conflict.has(~cl.lookup(xs[i])))
-                        out.push(xs[i]);
-                static double seed = 12345678;
-                randomShuffle(seed, out);
-                randomShuffle(seed, fix);
-                out.copyTo(xs);
+                // Copy the literals in 'xs' that were still needed in the conflict:
+                int j,k;
+                for (j = k = 0; j < xs.size(); j++)
+                    if (s.conflict.has(~cl.lookup(xs[j])))
+                        xs[k++] = xs[j];
+                xs.shrink(j - k);
 
                 if (xs.size() < size_before){
                     if (verbose) printf(".%d", xs.size());
@@ -164,27 +166,36 @@ namespace Tip {
                     fails++;
                     if (verbose) printf("x");
                 }
+
+                // Terminate, or shuffle the order of literals to increase chance of other removal
+                // opportunities in next iteration:
+                static double seed = 12345678;
+                if (fails < 2 && i < iters){
+                    randomShuffle(seed, xs);
+                    randomShuffle(seed, fix);
+                }else
+                    break;
             }
             if (verbose) printf("\n");
 
             s.releaseVar(~trigg);
         }
 
-        void shrinkModelOnce(SimpSolver& s, Clausifyer<SimpSolver>& cl,
-                             const vec<Sig>& fixed, vec<Sig>& xs, const vec<Sig>& top, bool verbose = false)
+        void shrinkModel(SimpSolver& s, Clausifyer<SimpSolver>& cl,
+                         const vec<Sig>& fixed, vec<Sig>& xs, const vec<Sig>& top, unsigned iters = 32, bool verbose = false)
         {
             vec<Lit> empty;
-            shrinkModelOnce(s, cl, fixed, xs, top, empty, verbose);
+            shrinkModel(s, cl, fixed, xs, top, empty, iters, verbose);
         }
 
 
-        void shrinkModelOnce(SimpSolver& s, Clausifyer<SimpSolver>& cl,
-                             const SSet& fixed, SSet& xs, const SSet& top, const vec<Lit>& fixed_lits, bool verbose = false)
+        void shrinkModel(SimpSolver& s, Clausifyer<SimpSolver>& cl,
+                         const SSet& fixed, SSet& xs, const SSet& top, const vec<Lit>& fixed_lits, unsigned iters = 32, bool verbose = false)
         {
             // Copy the set 'xs':
             vec<Sig> ys; xs.toVec().copyTo(ys);
 
-            shrinkModelOnce(s, cl, fixed.toVec(), ys, top.toVec(), fixed_lits, verbose);
+            shrinkModel(s, cl, fixed.toVec(), ys, top.toVec(), fixed_lits, iters, verbose);
 
             // Copy back the reduced set 'ys':
             xs.clear();
@@ -193,11 +204,11 @@ namespace Tip {
         }
 
 
-        void shrinkModelOnce(SimpSolver& s, Clausifyer<SimpSolver>& cl,
-                             const SSet& fixed, SSet& xs, const SSet& top, bool verbose = false)
+        void shrinkModel(SimpSolver& s, Clausifyer<SimpSolver>& cl,
+                         const SSet& fixed, SSet& xs, const SSet& top, unsigned iters = 32, bool verbose = false)
         {
             vec<Lit> empty;
-            shrinkModelOnce(s, cl, fixed, xs, top, empty, verbose);
+            shrinkModel(s, cl, fixed, xs, top, empty, iters, verbose);
         }
 
 
@@ -422,7 +433,7 @@ namespace Tip {
                     subModel(inputs,  *cl, inputs_set);
                     //lset.fromModel(inputs, solver);
                     // const vec<Lit>& shrink_roots = assumes;
-                    // shrinkModelOnce(solver, lset, shrink_roots);
+                    // shrinkModel(solver, lset, shrink_roots);
                     
                     vec<vec<lbool> > frames;
                     traceResetInputs(tip, inputs_set, uc, frames);
@@ -724,7 +735,7 @@ namespace Tip {
             subModel(outputs, *cl, outputs_set);
             outputs_set.insert(~uc.lookup(p, depth()));
             assert(cl->modelValue(~uc.lookup(p, depth())) == l_True);
-            shrinkModelOnce(*solver, *cl, inputs_set, flops_set, outputs_set, tip.verbosity >= 3);
+            shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 3);
 
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
@@ -777,9 +788,9 @@ namespace Tip {
     }
 
     PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_,
-                               int cnf_level_, int depth, bool use_ind_, bool use_uniq_)
+                               int cnf_level_, uint32_t max_min_tries_, int depth, bool use_ind_, bool use_uniq_)
         : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0),
-          cnf_level(cnf_level_), depth_(depth), use_ind(use_ind_), use_uniq(use_uniq_)
+          cnf_level(cnf_level_), max_min_tries(max_min_tries_), depth_(depth), use_ind(use_ind_), use_uniq(use_uniq_)
     {
         reset(depth_);
     }
@@ -1023,7 +1034,7 @@ namespace Tip {
                 subModel(outputs, *cl, outputs_set);
                 outputs.shrink(c.size());
 
-                shrinkModelOnce(*solver, *cl, inputs_set, flops_set, outputs_set, tip.verbosity >= 3);
+                shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 3);
 
 
                 vec<vec<lbool> > frames;
@@ -1090,8 +1101,8 @@ namespace Tip {
         return prove(c, yes, dummy);
     }
 
-    StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, int cnf_level_)
-        : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0), cnf_level(cnf_level_)
+    StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, int cnf_level_, uint32_t max_min_tries_)
+        : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0), cnf_level(cnf_level_), max_min_tries(max_min_tries_)
     {
         reset();
     }

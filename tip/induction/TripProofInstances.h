@@ -172,10 +172,11 @@ namespace Tip {
         double         cpu_time;
 
         // Options:
-        int            cnf_level;  // Effort level for CNF simplification.
-        unsigned       depth_;     // Depth of the unrolling.
-        bool           use_ind;    // Use property in induction hypothesis.
-        bool           use_uniq;   // Use unique state induction.
+        int            cnf_level;     // Effort level for CNF simplification.
+        uint32_t       max_min_tries; // Max number of iterations in model minimization.
+        unsigned       depth_;        // Depth of the unrolling.
+        bool           use_ind;       // Use property in induction hypothesis.
+        bool           use_uniq;      // Use unique state induction.
         
     public:
         void reset       (unsigned new_depth);
@@ -184,7 +185,7 @@ namespace Tip {
         void addClause   (const Clause& c);
         
         PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_,
-                     int cnf_level_, int depth_, bool use_ind_, bool use_uniq_);
+                     int cnf_level_, uint32_t max_min_tries_, int depth_, bool use_ind_, bool use_uniq_);
         ~PropInstance();
         
         lbool prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle);
@@ -225,7 +226,8 @@ namespace Tip {
         vec<unsigned>  cycle_clauses;
         Lit            act_cnstrs;
         double         cpu_time;
-        int            cnf_level;  // Effort level for CNF simplification.
+        int            cnf_level;     // Effort level for CNF simplification.
+        uint32_t       max_min_tries; // Max number of iterations in model minimization.
         
         void reset();
         
@@ -234,7 +236,7 @@ namespace Tip {
 
         void resetCycle(unsigned cycle, unsigned num_clauses);
 
-        StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, int cnf_level_);
+        StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, int cnf_level_, uint32_t max_min_tries_);
         ~StepInstance();
         
         bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
