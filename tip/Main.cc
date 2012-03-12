@@ -50,23 +50,23 @@ int main(int argc, char** argv)
 {
     setlinebuf(stdout);
     setUsageHelp("USAGE: %s [options] <input-file> <result-output-file>\n\n  where input is in plain or gzipped binary AIGER.\n");
-    IntOption bver ("MAIN", "bv",   "Version of BMC to be used.", 0, IntRange(0,2));
-    IntOption depth("MAIN", "k",    "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
-    IntOption safe ("MAIN", "safe", "Which safety property to work on.", -1, IntRange(-1,INT32_MAX));
-    IntOption live ("MAIN", "live", "Which liveness property to work on.", -1, IntRange(-1,INT32_MAX));
-    BoolOption embed("MAIN", "embed", "Embed all constraints in the properties.", false);
-    IntOption kind ("MAIN", "kind", "What kind of algorithm to run.", 0, IntRange(0,INT32_MAX));
-    IntOption verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
-    IntOption sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
-    IntOption fce  ("MAIN", "fce",  "Fairness constraint extraction level (0=off).", 0);
-    BoolOption fce_prop("MAIN", "fce-prop", "Use liveness properties in fairness constraint extraction.", true);
-    BoolOption prof("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
-    BoolOption coif("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
-    IntOption td   ("MAIN", "td",   "Use temporal decomposition (-2=auto, -1=none, otherwise minimum unrolling).", -2, IntRange(-1, INT32_MAX));
-    IntOption tdmax("MAIN", "tdmax","Max cycles for temporal decomposition.", 32, IntRange(0, INT32_MAX));
-    BoolOption xsafe("MAIN", "xsafe", "Extract extra safety properties.", false);
-    StringOption alg("MAIN", "alg", "Main model checking algorithm to use.", "rip");
-    IntOption rip_bmc("RIP", "rip-bmc", "Bmc-mode to use in Rip-engine (-1=auto, 0=none, 1=safe, 2=live).", -1);
+    IntOption    bver ("MAIN", "bv",   "Version of BMC to be used.", 0, IntRange(0,2));
+    IntOption    depth("MAIN", "k",    "Maximal depth of unrolling.", INT32_MAX, IntRange(0,INT32_MAX));
+    IntOption    safe ("MAIN", "safe", "Which safety property to work on.", -1, IntRange(-1,INT32_MAX));
+    IntOption    live ("MAIN", "live", "Which liveness property to work on.", -1, IntRange(-1,INT32_MAX));
+    BoolOption   embed("MAIN", "embed", "Embed all constraints in the properties.", false);
+    IntOption    kind ("MAIN", "kind", "What kind of algorithm to run.", 0, IntRange(0,INT32_MAX));
+    IntOption    verb ("MAIN", "verb", "Verbosity level.", 1, IntRange(0,10));
+    IntOption    sce  ("MAIN", "sce",  "Use semantic constraint extraction (0=off, 1=minimize-algorithm, 2=basic-algorithm).", 0, IntRange(0,2));
+    IntOption    fce  ("MAIN", "fce",  "Fairness constraint extraction level (0=off).", 0);
+    BoolOption   fce_prop("MAIN", "fce-prop", "Use liveness properties in fairness constraint extraction.", true);
+    BoolOption   prof ("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
+    BoolOption   coif ("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
+    IntOption    td   ("MAIN", "td",   "Use temporal decomposition (-1=none, otherwise minimum unrolling).", 0, IntRange(-1, INT32_MAX));
+    IntOption    tdmax("MAIN", "tdmax","Max cycles for temporal decomposition.", 32, IntRange(0, INT32_MAX));
+    BoolOption   xsafe("MAIN", "xsafe", "Extract extra safety properties.", false);
+    StringOption alg  ("MAIN", "alg", "Main model checking algorithm to use.", "rip");
+    IntOption    rip_bmc("RIP", "rip-bmc", "Bmc-mode to use in Rip-engine (-1=auto, 0=none, 1=safe, 2=live).", 0);
     StringOption aiger("MAIN", "aiger", "Temporary AIGER writing.", NULL);
 
     parseOptions(argc, argv, true);
@@ -100,15 +100,7 @@ int main(int argc, char** argv)
             rbmc = ripbmc_Safe;
     }
 
-    int td_depth;
-    if (td != -2)
-        td_depth = td;
-    else{
-        if (num_live > 0)
-            td_depth = 0;
-        else
-            td_depth = 2;
-    }
+    int td_depth = td;
 
     // Select one safety or liveness property:
     if (safe >= 0) tc.selSafe(safe);
