@@ -405,9 +405,16 @@ namespace Tip {
 #endif
             }
 
-            if (tip.verbosity >= 4 && c->cycle < yes_step.cycle)
-                printf("[proveStep] clause was proved in the future: %d -> %d\n",
-                       c->cycle, yes_step.cycle);
+            // Check if clause is already inductive:
+            if (yes_step.cycle != cycle_Undef){
+                Clause inf = yes_step;
+                inf.cycle = cycle_Undef;
+                if (step.prove(inf, yes_step)){
+                    check(init.prove(inf, yes_step, yes_init));
+                    assert(subsumes(yes_step, yes_init));
+                    yes_step = yes_init;
+                }
+            }
 
             // Push clause forwards as much as possible:
             while (yes_step.cycle < size()-1){
