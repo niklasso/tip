@@ -455,12 +455,6 @@ namespace Tip {
         return result;
     }
 
-    void InitInstance::extendLiveness()
-    {
-        //assert(umapl[0][gate_True] != lit_Undef);
-    }
-
-
     bool InitInstance::prove(const Clause& c, const Clause& bot, Clause& yes)
     {
         SharedRef<ScheduledClause> dummy;
@@ -503,15 +497,8 @@ namespace Tip {
             vec<Lit> xs;
             if (c.cycle != cycle_Undef)
                 xs.push(~act_cycle);
-            for (unsigned i = 0; i < c.size(); i++){
-                Sig x = uc.lookup(c[i], 0);
-                if (x == sig_Undef){
-                    x = uc.unroll(c[i], 0);
-                    flops.push(x);
-                    cl->clausify(x);
-                }
-                xs.push(cl->lookup(x));
-            }
+            for (unsigned i = 0; i < c.size(); i++)
+                xs.push(cl->clausify(uc.unroll(c[i], 0)));
             solver->addClause(xs);
         }
     }
@@ -552,10 +539,11 @@ namespace Tip {
         // Unroll property in last frame:
         uc.unrollSafeProps(depth(), props);
 
-        // Unroll previous event counters in last frame:
-        for (LiveProp p = 0; p < event_cnts.size(); p++)
-            if (tip.live_props[p].stat == pstat_Unknown)
-                props.push(uc.unroll(event_cnts[p].q, depth()));
+        // Unroll previous event counters in all frames:
+        for (unsigned cycle = 0; cycle <= depth(); cycle++)
+            for (LiveProp p = 0; p < event_cnts.size(); p++)
+                if (tip.live_props[p].stat == pstat_Unknown)
+                    props.push(uc.unroll(event_cnts[p].q, cycle));
 
         // Extract and unroll internal flops needed for unique state induction:
         if (use_uniq){
@@ -580,17 +568,10 @@ namespace Tip {
             }            
         }
 
-        if (use_ind){
+        if (use_ind)
             // Unroll property in remaining frames:
             for (unsigned cycle = 0; cycle < depth(); cycle++)
                 uc.unrollSafeProps(cycle, props);
-
-            // Unroll previous event counters in remaining frames:
-            for (unsigned cycle = 0; cycle < depth(); cycle++)
-                for (LiveProp p = 0; p < event_cnts.size(); p++)
-                    if (tip.live_props[p].stat == pstat_Unknown)
-                        props.push(uc.unroll(event_cnts[p].q, cycle));
-        }
 
         // Extract inputs + flops used in unrolling:
         for (unsigned cycle = 0; cycle <= depth(); cycle++)
@@ -655,16 +636,14 @@ namespace Tip {
     lbool PropInstance::prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle)
     {
         double   time_before = cpuTime();
-        Lit      l = cl->lookup(uc.lookup(p, depth()));
+        Lit      l = cl->clausify(uc.unroll(p, depth()));
         vec<Lit> assumps;
         lbool    result;
 
         if (use_ind)
             for (unsigned i = 0; i < depth(); i++){
-                Sig x = uc.lookup(p, i);
-                assert(x != sig_Undef);
-                Lit l = cl->lookup(x);
-                assert(l != lit_Undef);
+                Sig x = uc.unroll(p, i);
+                Lit l = cl->clausify(x);
                 assumps.push(l);
             }
         assumps.push(~l);
@@ -716,9 +695,10 @@ namespace Tip {
         if (sat){
             assert(solver->modelValue(l) == l_False);
             // Found predecessor state to a bad state:
-
-            subModel(inputs,  *cl, inputs_set);
+            flops.clear();
+            uc.extractUsedFlops(0, flops);
             subModel(flops,   *cl, flops_set);
+            subModel(inputs,  *cl, inputs_set);
             subModel(outputs, *cl, outputs_set);
             outputs_set.insert(~uc.lookup(p, depth()));
             assert(cl->modelValue(~uc.lookup(p, depth())) == l_True);
@@ -757,22 +737,6 @@ namespace Tip {
         return result;
     }
 
-
-    void PropInstance::extendLiveness(Gate f, Sig f_next)
-    {
-        Sig x = uc.unroll(f_next, depth());
-        cl->clausify(x);
-
-        if (use_ind)
-            for (unsigned i = 0; i < depth(); i++){
-                Sig x = uc.unroll(f_next, i);
-                cl->clausify(x);
-            }
-
-        Sig slask = uc.unroll(f, 0);
-        cl->clausify(slask);
-        flops.push(slask);
-    }
 
     PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_,
                                int cnf_level_, uint32_t max_min_tries_, int depth, bool use_ind_, bool use_uniq_)
@@ -815,15 +779,8 @@ namespace Tip {
             cycle_clauses[c.cycle]++;
         }
 
-        for (unsigned i = 0; i < c.size(); i++){
-            Sig x = uc.lookup(c[i], 0);
-            if (x == sig_Undef){
-                x = uc.unroll(c[i], 0);
-                flops.push(x);
-                cl->clausify(x);
-            }
-            xs.push(cl->lookup(x));
-        }
+        for (unsigned i = 0; i < c.size(); i++)
+            xs.push(cl->clausify(uc.unroll(c[i], 0)));
         solver->addClause(xs);
     }
 
@@ -878,7 +835,7 @@ namespace Tip {
         uc.unrollFlopsNext  (0, props);
         uc.unrollLiveProps  (0, props);
 
-        // Unroll previous event counters in last frame:
+        // Unroll previous event counters:
         for (LiveProp p = 0; p < event_cnts.size(); p++)
             if (tip.live_props[p].stat == pstat_Unknown)
                 props.push(uc.unroll(event_cnts[p].q, 0));
@@ -961,8 +918,7 @@ namespace Tip {
         // Assume negation of clause 'c' (outgoing):
         for (unsigned i = 0; i < c.size(); i++){
             Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
-            Lit l = cl->lookup(uc.lookup(x, 0));
-            assert(l != lit_Undef);
+            Lit l = cl->clausify(uc.unroll(x, 0));
             assumes.push(~l);
         }
         // Assume constraints:
@@ -1010,8 +966,10 @@ namespace Tip {
         if (sat){
             // Found a counter-example:
             if (next != NULL){
-                subModel(inputs,  *cl, inputs_set);
+                flops.clear();
+                uc.extractUsedFlops(0, flops);
                 subModel(flops,   *cl, flops_set);
+                subModel(inputs,  *cl, inputs_set);
 
                 for (unsigned i = 0; i < c.size(); i++){
                     Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
@@ -1069,16 +1027,6 @@ namespace Tip {
         cpu_time += cpuTime() - time_before;
 
         return result;
-    }
-
-
-    void StepInstance::extendLiveness(Gate f, Sig f_next)
-    {
-        Sig x  = uc.unroll(f_next, 0);
-        cl->clausify(x);
-        Sig slask = uc.unroll(f, 0);
-        cl->clausify(slask);
-        flops.push(slask);
     }
 
 

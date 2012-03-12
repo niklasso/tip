@@ -504,10 +504,6 @@ namespace Tip {
             Sig out = tip.main.mkMux(evt, event_cnts[p].q, flp);
             tip.flps.define(gate(flp), out);
 
-            init.extendLiveness();
-            prop.extendLiveness(gate(flp), flp);
-            step.extendLiveness(gate(flp), out);
-
             num_occ.growTo(tip.main.lastGate(), 0);
 
             // Add that the new target can not be falsified up to the current cycle:
@@ -538,10 +534,6 @@ namespace Tip {
             Sig qpr = tip.main.mkAnd(event_cnts[p].q, flp);
             tip.flps.define(gate(flp), out);
 
-            init.extendLiveness();
-            prop.extendLiveness(gate(flp), qpr);
-            step.extendLiveness(gate(flp), out);
-
             num_occ.growTo(tip.main.lastGate(), 0);
 
             // Add that the new target can not be falsified up to the current cycle:
@@ -570,10 +562,6 @@ namespace Tip {
             Sig sum = tip.main.mkXor(event_cnts[p].q, flp);
             Sig cry = tip.main.mkAnd(event_cnts[p].q, flp);
             tip.flps.define(gate(flp), sum);
-
-            init.extendLiveness();
-            prop.extendLiveness(gate(flp), cry);
-            step.extendLiveness(gate(flp), sum);
 
             num_occ.growTo(tip.main.lastGate(), 0);
 

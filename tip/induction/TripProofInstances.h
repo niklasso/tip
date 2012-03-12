@@ -135,8 +135,6 @@ namespace Tip {
 
         void reduceClause(Clause& c);
 
-        void extendLiveness();
-
         uint64_t props();
         uint64_t solves();
         double   time();
@@ -190,8 +188,6 @@ namespace Tip {
         
         lbool prove(Sig p, SharedRef<ScheduledClause>& no, unsigned cycle);
 
-        void extendLiveness(Gate f, Sig f_next);
-
         uint64_t props();
         uint64_t solves();
         double   time();
@@ -241,8 +237,6 @@ namespace Tip {
         
         bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
         bool prove(const Clause& c, Clause& yes);
-
-        void extendLiveness(Gate f, Sig f_next);
 
         uint64_t props();
         uint64_t solves();
