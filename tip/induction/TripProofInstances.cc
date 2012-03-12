@@ -971,8 +971,8 @@ namespace Tip {
         // Try to satisfy clause 'c' (incoming):
         vec<Lit> cls;
         for (unsigned i = 0; i < c.size(); i++){
-            Lit l = cl->lookup(uc.lookup(c[i], 0));
-            assert(l != lit_Undef);
+            Sig x = uc.unroll(c[i], 0);
+            Lit l = cl->clausify(x);
             solver->setPolarity(var(l), lbool(!sign(l)));
             cls.push(l);
         }
