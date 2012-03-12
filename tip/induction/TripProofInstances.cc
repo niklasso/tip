@@ -371,11 +371,6 @@ namespace Tip {
         assert(subsumes(bot, c_));
 
         double time_before = cpuTime();
-
-        // printf("[InitInstance::prove] proving c_ = ");
-        // printClause(tip, c_);
-        // printf("\n");
-
         Clause cand_;
         Clause rest;
 
@@ -395,8 +390,6 @@ namespace Tip {
         vec<Lit> assumes;
         bool     result;
 
-        // printf("[InitInstance::prove] begin.\n");
-
         for (int i = 0; i < cand.size(); i++){
             Sig x = uc.unroll(cand[i], 0);
             Lit l = cl->lookup(x);
@@ -404,17 +397,18 @@ namespace Tip {
             assumes.push(~l);
         }
 
-        {
-        retry:
+        if (next == NULL)
+            solver->extend_model = false;
+
+        bool sat;
+        bool bad_model;
+        do {
             // printf("[InitInstance::prove] cand = ");
             // printSigs(cand);
             // printf("\n");
-        
-            if (next == NULL)
-                solver->extend_model = false;
-            bool sat = solver->solve(assumes);
-
-            if (sat){
+            bad_model = false;
+            sat       = solver->solve(assumes);
+            if (sat)
                 for (unsigned i = 0; i < rest.size(); i++){
                     Sig x = uc.unroll(rest[i], 0);
                     Lit l = cl->lookup(x);
@@ -422,44 +416,37 @@ namespace Tip {
                     if (solver->modelValue(l) == l_True){
                         cand.push(rest[i]);
                         assumes.push(~l);
-                        goto retry;
+                        bad_model = true;
                     }
                 }
-            }
+        }while (bad_model);
 
-            if (sat){
-                // Found a counter-example:
-                if (next != NULL){
-                    subModel(inputs,  *cl, inputs_set);
-                    //lset.fromModel(inputs, solver);
-                    // const vec<Lit>& shrink_roots = assumes;
-                    // shrinkModel(solver, lset, shrink_roots);
+        if (sat){
+            // Found a counter-example:
+            if (next != NULL){
+                subModel(inputs,  *cl, inputs_set);
+                vec<vec<lbool> > frames;
+                vec<Sig>         dummy;
+                traceResetInputs(tip, inputs_set, uc, frames);
+                SharedRef<ScheduledClause> pred_rst(new ScheduledClause(dummy, 0, frames[0], next));
                     
-                    vec<vec<lbool> > frames;
-                    traceResetInputs(tip, inputs_set, uc, frames);
-                    frames.push();
-
-                    vec<Sig>         dummy;
-                    SharedRef<ScheduledClause> pred_rst(new ScheduledClause(dummy, 0, frames[0], next));
-                    
-                    no = pred_rst;
-                }
-                result = false;
-            }else{
-                assert(solver->conflict.size() > 0);
-                // Proved the clause:
-                
-                vec<Sig> subset;
-                for (int i = 0; i < cand.size(); i++){
-                    Sig x = uc.unroll(cand[i], 0);
-                    Lit l = cl->lookup(x);
-                    if (solver->conflict.has(l))
-                        subset.push(cand[i]);
-                }
-                
-                yes    = bot + Clause(subset, 0);
-                result = true;
+                no = pred_rst;
             }
+            result = false;
+        }else{
+            assert(solver->conflict.size() > 0);
+            // Proved the clause:
+            
+            vec<Sig> subset;
+            for (int i = 0; i < cand.size(); i++){
+                Sig x = uc.unroll(cand[i], 0);
+                Lit l = cl->lookup(x);
+                if (solver->conflict.has(l))
+                    subset.push(cand[i]);
+            }
+                
+            yes    = bot + Clause(subset, 0);
+            result = true;
         }
 
         solver->extend_model = true;
