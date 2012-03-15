@@ -80,6 +80,7 @@ namespace Tip {
             GMap<float>          flop_act;      // Heuristic value of importance for each flop.
             uint32_t             luby_index;    // Luby sequence index.
             uint32_t             restart_cnt;   // Restart bound counter.
+            int                  safe_depth;    // Largest depth at which all active properties are implied.
 
             vec<vec<SharedRef<ScheduledClause> > >
                                  clause_queue;
@@ -205,7 +206,8 @@ namespace Tip {
             void             verifyInvariant ();
 
             Trip(TipCirc& t, unsigned prop_depth, bool start_at_depth_zero)
-                             : tip(t), n_inv(0), n_total(0), flop_act(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), 
+                             : tip(t), n_inv(0), n_total(0), flop_act(tip.main.lastGate(), 0), 
+                               luby_index(0), restart_cnt(0),safe_depth(-1),
 
                                init(t, opt_cnf_level),
                                prop(t, F, F_inv, event_cnts, flop_act, opt_cnf_level, opt_max_min_tries, start_at_depth_zero ? 0 : prop_depth, opt_use_ind, opt_use_uniq),
@@ -407,7 +409,7 @@ namespace Tip {
             }
 
             // Push clause forwards as much as possible:
-            while (yes_step.cycle < size()-1){
+            while (yes_step.cycle < size()){
                 Clause d = yes_step;
                 d.cycle++;
                 if (!step.prove(d, yes_step))
@@ -450,7 +452,7 @@ namespace Tip {
         }
 
 
-        lbool Trip::proveProp(Sig p, SharedRef<ScheduledClause>& no){ return prop.prove(p, no, size()-1); }
+        lbool Trip::proveProp(Sig p, SharedRef<ScheduledClause>& no){ return prop.prove(p, no, safe_depth+1); }
 
 
         bool Trip::baseCase()
@@ -499,7 +501,7 @@ namespace Tip {
             // Add that the new target can not be falsified up to the current cycle:
             vec<Sig> cls;
             cls.push(~flp);
-            Clause f(cls, size()-1);
+            Clause f(cls, safe_depth+1); // FIXME: is this right?
             addClause(f);
 
             // Add that the new target implies the old target always:
@@ -529,7 +531,7 @@ namespace Tip {
             // Add that the new target can not be falsified up to the current cycle:
             vec<Sig> cls;
             cls.push(~flp);
-            Clause f(cls, size()-1);
+            Clause f(cls, safe_depth+1); // FIXME: is this right?
             addClause(f);
 
             // Add that the new target implies the old target always:
@@ -696,14 +698,12 @@ namespace Tip {
         bool Trip::addClause(const Clause& c_)
         {
             unsigned cycle = c_.cycle;
-            if (c_.cycle != cycle_Undef){
-                assert(cycle <= size());
-                // Clause that hold up-to and including 'cycle':
-                // FIXME: how to handle the case when 'cycle == size()'
-                if (cycle == size())
-                    cycle--;
-                F[cycle].push(new Clause(c_));
+            if (cycle != cycle_Undef){
+                F     .growTo(cycle+1);
+                F_size.growTo(cycle+1, 0);
+                F     [cycle].push(new Clause(c_));
                 F_size[cycle]++;
+                assert(F[cycle].last()->cycle == cycle);
                 F[cycle].last()->cycle = cycle;
             }else{
                 // Invariant clause:
@@ -736,7 +736,8 @@ namespace Tip {
                     flop_act[gate(c[i])] += val;
             }
 
-            prop.addClause(c);
+            if (c.cycle >= safe_depth+1 || c.cycle == cycle_Undef)
+                prop.addClause(c);
             step.addClause(c);
 
             // Attach to backward subsumption index:
@@ -1003,7 +1004,7 @@ namespace Tip {
             verifySubsumption();
 #endif
             
-            for (int k = 0; k < F.size()-1; k++){
+            for (int k = 0; k < F.size(); k++){
                 int i,j;
                 unsigned cycle;
                 for (i = j = 0; i < F[k].size(); i++){
@@ -1059,6 +1060,9 @@ namespace Tip {
         bool Trip::proveRec(SharedRef<ScheduledClause> sc, SharedRef<ScheduledClause>& pred)
         {
             uint32_t bound = (restart_luby ? luby(2, luby_index) : 1) * restart_ival;
+            
+            DEB(printf("[proveRec] begin.\n"));
+            unsigned cnt = 0;
 
             enqueueClause(sc);
             for (;;){
@@ -1067,25 +1071,34 @@ namespace Tip {
                 if (sc == NULL)
                     break;
 
+                DEB(printf("[proveRec] sc = "));
+                DEB(printClause(*sc));
+                DEB(printf("\n"));
+
                 unsigned sub_cycle;
                 if (fwdSubsumed(&(const Clause&)*sc, sub_cycle)){
-                    if (fwd_revive && sub_cycle != cycle_Undef && sub_cycle+1 < size()){
+                    DEB(printf("[proveRec] SUBSUMED at cycle %d!\n", sub_cycle));
+                    assert(cnt > 0);
+                    if (fwd_revive && sub_cycle != cycle_Undef && sub_cycle+1 <= safe_depth+1){
                         cands_revived++;
                         assert(sub_cycle >= sc->cycle);
                         sc->cycle = sub_cycle+1;
                         enqueueClause(sc); }
                     continue;
                 }
+                DEB(printf("[proveRec] PROVING.\n"));
 
                 Clause minimized;
                 static unsigned iters = 0;
 
+                assert(sc->cycle <= safe_depth+1);
                 if (proveAndGeneralize(sc, minimized, pred)){
                     if ((iters++ % 10) == 0) printStats(sc->cycle, false);
 
                     cls_total_size    += minimized.size();
                     cls_total_before  += sc->size();
                     cls_total_removed += sc->size() - minimized.size();
+                    cnt++;
 
                     if (bound > 0){
                         // Handle restarts:
@@ -1101,7 +1114,7 @@ namespace Tip {
                     
                     if (addClause(minimized)){
                         extractInvariant();
-                    }else if (fwd_inst && minimized.cycle != cycle_Undef && minimized.cycle+1 < size()){
+                    }else if (fwd_inst && minimized.cycle != cycle_Undef && minimized.cycle+1 <= safe_depth+1){
                         sc->cycle = minimized.cycle+1;
                         enqueueClause(sc);
                     }
@@ -1143,7 +1156,7 @@ namespace Tip {
                 if (tip.safe_props[p].stat == pstat_Unknown){
                     lbool prop_res = l_False;
                     do {
-                        // printf("[decideCycle] checking safety property %d in cycle %d\n", p, size());
+                        // printf("[decideCycle] checking safety property %d in cycle %d\n", p, safe_depth+1);
                         prop_res = proveProp(tip.safe_props[p].sig, pred);
                         if (prop_res == l_False){
                             cands_added++;
@@ -1214,15 +1227,14 @@ namespace Tip {
             if (unresolved == 0)
                 result = true;
             else if (prop.depth() < goal_depth){
-                prop.reset(prop.depth()+1);
+                prop.reset(safe_depth+1, prop.depth()+1);
                 result = false;
             }else{
                 // At this point we know that all remaining properties are implied in cycle k+1. Expand
                 // a new frame and push clauses forward as much as possible:
-                F.push();
-                F_size.push(0);
-                prop.clearClauses();
+                safe_depth++;
                 pushClauses();
+                prop.clearClauses(safe_depth+1);
                 result = false;
             }
 
@@ -1243,7 +1255,7 @@ namespace Tip {
             return cpu_time;
         }
 
-        int Trip::depth() const { return size()+1; }
+        int Trip::depth() const { return safe_depth + 2; }
 
 
         void Trip::printStats(unsigned curr_cycle, bool newline)
@@ -1259,8 +1271,10 @@ namespace Tip {
                         n_lives++;
 
                 printf("[rip] ");
-                printf("%d:", size());
+                printf("%d:", depth());
                 for (int i = 0; i < F.size(); i++){
+                    if (i == safe_depth+1)
+                        printf(" |");
                     printf("%c%d", i == (int)curr_cycle ? '*' : ' ', F_size[i]);
                 }
                 printf(" (%d) = %d, time = %.1f s", n_inv, n_total, cpu_time);
@@ -1270,7 +1284,7 @@ namespace Tip {
             }
 
             if (newline && tip.verbosity >= 3){
-                printf("[rip-stats] #clauses=%d, depth=%d\n", n_total, size());
+                printf("[rip-stats] #clauses=%d, depth=%d\n", n_total, depth());
                 init.printStats();
                 prop.printStats();
                 step.printStats();
@@ -1381,6 +1395,7 @@ namespace Tip {
                     bmc->printStats ();
                 }
         }
+        trip.printStats();
 
         // If some property was proved, print the invariant:
         for (SafeProp p = 0; p < tip.safe_props.size(); p++)

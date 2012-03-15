@@ -484,27 +484,36 @@ namespace Tip {
     //===================================================================================================
     // Implementation of PropInstance:
 
-    void PropInstance::clearClauses()
+    void PropInstance::clearClauses(unsigned safe_lim)
     {
+        // printf("[PropInstance::clearClauses]\n");
         solver->releaseVar(~act_cycle);
         act_cycle = mkLit(solver->newVar());
+
+        for (int i = safe_lim; i < F.size(); i++)
+            for (int j = 0; j < F[i].size(); j++){
+                assert(F[i][j]->isActive());
+                addClause(*F[i][j]);
+            }
     }
+
 
     void PropInstance::addClause(const Clause& c)
     {
-        // Add the clause if it is an invariant, or if it belongs to the last cycle:
-        if (c.cycle == (unsigned)F.size()-1 || c.cycle == cycle_Undef){
-            vec<Lit> xs;
-            if (c.cycle != cycle_Undef)
-                xs.push(~act_cycle);
-            for (unsigned i = 0; i < c.size(); i++)
-                xs.push(cl->clausify(uc.unroll(c[i], 0)));
-            solver->addClause(xs);
-        }
+        // printf("[PropInstance::addClause] c = ");
+        // printClause(tip, c);
+        // printf("\n");
+
+        vec<Lit> xs;
+        if (c.cycle != cycle_Undef)
+            xs.push(~act_cycle);
+        for (unsigned i = 0; i < c.size(); i++)
+            xs.push(cl->clausify(uc.unroll(c[i], 0)));
+        solver->addClause(xs);
     }
 
 
-    void PropInstance::reset(unsigned new_depth)
+    void PropInstance::reset(unsigned safe_lim, unsigned new_depth)
     {
         depth_ = new_depth;
 
@@ -624,9 +633,11 @@ namespace Tip {
         //printf(" (after)  #vars = %d, #clauses = %d\n", solver->nFreeVars(), solver->nClauses());
 
         // Add all previously existing clauses relevant to the prop-instance:
-        if (F.size() > 0)
-            for (int i = 0; i < F.last().size(); i++)
-                addClause(*F.last()[i]);
+        for (int i = safe_lim; i < F.size(); i++)
+            for (int j = 0; j < F[i].size(); j++){
+                assert(F[i][j]->isActive());
+                addClause(*F[i][j]);
+            }
 
         for (int i = 0; i < F_inv.size(); i++)
             addClause(*F_inv[i]);
@@ -760,7 +771,7 @@ namespace Tip {
           uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0),
           cnf_level(cnf_level_), max_min_tries(max_min_tries_), depth_(depth), use_ind(use_ind_), use_uniq(use_uniq_)
     {
-        reset(depth_);
+        reset(0, depth_);
     }
 
 

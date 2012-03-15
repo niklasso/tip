@@ -178,9 +178,9 @@ namespace Tip {
         bool           use_uniq;      // Use unique state induction.
         
     public:
-        void reset       (unsigned new_depth);
+        void reset       (unsigned safe_lim, unsigned new_depth);
 
-        void clearClauses();
+        void clearClauses(unsigned safe_lim);
         void addClause   (const Clause& c);
         
         PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, GMap<float>& flop_act_,
