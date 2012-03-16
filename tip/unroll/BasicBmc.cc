@@ -46,8 +46,8 @@ void BasicBmc::nextLiveness()
     const LiveCycle& prev = live_data[live_data.size()-2];
 
     // Loop logic for next cycle:
-    for (int i = 0; i < unroll.numFlops(); i++){
-        Sig x = umap[gate(tip.flps.next(tip.flps[i]))] ^ sign(tip.flps.next(tip.flps[i]));
+    for (unsigned i = 0; i < orig_nflops; i++){
+        Sig x = unroll(tip.flps.next(tip.flps[i]), cycle);
         Lit l = cl.clausify(x);
         s.addClause(~next.loop_now, ~l,  looping_state[i]);
         s.addClause(~next.loop_now,  l, ~looping_state[i]);
@@ -61,7 +61,7 @@ void BasicBmc::nextLiveness()
     for (LiveProp p = 0; p < tip.live_props.size(); p++)
         if (tip.live_props[p].stat == pstat_Unknown){
             assert(tip.live_props[p].sigs.size() == 1);
-            Sig q  = umap[gate(tip.live_props[p].sigs[0])] ^ sign(tip.live_props[p].sigs[0]);
+            Sig q  = unroll(tip.live_props[p].sigs[0], cycle);
             Lit lq = cl.clausify(q);
             next.live_in_loop[p] = mkLit(s.newVar());
 
@@ -75,11 +75,11 @@ void BasicBmc::nextLiveness()
 
 
 BasicBmc::BasicBmc(TipCirc& t, bool check_live_)
-  : tip(t), 
+  : UnrolledCirc(t, false),
+    tip(t), 
     solve_time(0),
-    unroll(tip, ui, uc, true),
-    cl(uc, s),
-    cycle(0),
+    cl(*this, s),
+    cycle(-1),
     check_live(check_live_),
     unresolved_safety(0),
     unresolved_liveness(0)
@@ -94,9 +94,10 @@ BasicBmc::BasicBmc(TipCirc& t, bool check_live_)
     
     // Handle liveness-encoding:
     if (check_live && unresolved_liveness > 0){
+        orig_nflops = tip.flps.size();
 
         // Create looping state variables:
-        for (int i = 0; i < unroll.numFlops(); i++)
+        for (unsigned i = 0; i < orig_nflops; i++)
             looping_state.push(mkLit(s.newVar()));
 
         // Initialize live_data for cycle 0:
@@ -110,8 +111,8 @@ BasicBmc::BasicBmc(TipCirc& t, bool check_live_)
 
         // Loop logic for cycle 0:
         Lit& loop0 = live_data[0].loop_now;
-        for (int i = 0; i < unroll.numFlops(); i++){
-            Sig x = unroll.front(i);
+        for (unsigned i = 0; i < orig_nflops; i++){
+            Sig x = unroll(tip.flps[i], 0);
             Lit l = cl.clausify(x);
             s.addClause(~loop0, ~l,  looping_state[i]);
             s.addClause(~loop0,  l, ~looping_state[i]);
@@ -122,15 +123,15 @@ BasicBmc::BasicBmc(TipCirc& t, bool check_live_)
 
 void BasicBmc::unrollCycle()
 {
-    unroll(umap);
+    cycle++;
 
     // Assert all constraints:
     for (unsigned j = 0; j < tip.cnstrs.size(); j++){
         Sig cx = tip.cnstrs[j][0];
-        Lit lx = cl.clausify(umap[gate(cx)] ^ sign(cx));
+        Lit lx = cl.clausify(unroll(cx, cycle));
         for (int k = 1; k < tip.cnstrs[j].size(); k++){
             Sig cy = tip.cnstrs[j][k];
-            Lit ly = cl.clausify(umap[gate(cy)] ^ sign(cy));
+            Lit ly = cl.clausify(unroll(cy, cycle));
             s.addClause(~lx, ly);
             s.addClause(~ly, lx);
         }
@@ -138,8 +139,36 @@ void BasicBmc::unrollCycle()
 
     if (check_live && unresolved_liveness > 0)
         nextLiveness();
+}
 
-    cycle++;
+
+void BasicBmc::extractTrace(vec<vec<lbool> >& frames)
+{
+    frames.push();
+    for (InpIt iit = tip.init.inpBegin(); iit != tip.init.inpEnd() ; ++iit)
+        if (tip.init.number(*iit) != UINT32_MAX){
+            frames.last().growTo(tip.init.number(*iit)+1, l_Undef);
+            frames.last()[tip.init.number(*iit)] = cl.modelValue(lookupInit(*iit));
+        }
+
+    for (int i = 0; i <= cycle; i++){
+        frames.push();
+        for (TipCirc::InpIt iit = tip.inpBegin(); iit != tip.inpEnd(); ++iit){
+            if (tip.main.number(*iit) != UINT32_MAX){
+                frames.last().growTo(tip.main.number(*iit)+1, l_Undef);
+                Sig   x = lookup(*iit, i);
+                // Lit   l = cl.lookup(x);
+                // lbool b = s.modelValue(l);
+                // printSig(x);
+                // printf(":%s%d:%c ", sign(l)?"-":"", var(l), b == l_Undef ? 'x' : b == l_True ? '1' : '0');
+                //printf("%c", x == sig_Undef ? 'x' : x == sig_True ? '1' : x == sig_False ? '0' : '*');
+                frames.last()[tip.main.number(*iit)] = cl.modelValue(lookup(*iit, i));
+            }
+        }
+        //printf("\n");
+    }
+
+    tip.adaptTrace(frames);
 }
 
 
@@ -171,20 +200,14 @@ void BasicBmc::decideCycle()
             continue;
             
         Sig psig_orig   = tip.safe_props[p].sig;
-        Sig psig_unroll = umap[gate(psig_orig)] ^ sign(psig_orig);
-        assert(psig_unroll != sig_Undef);
-        Lit plit = cl.clausify(psig_unroll);
+        Sig psig_unroll = unroll(psig_orig, cycle);
+        Lit plit        = cl.clausify(psig_unroll);
 
         if (s.solve(~plit)){
             // Property falsified, create and extract trace:
             Trace             cex    = tip.newTrace();
             vec<vec<lbool> >& frames = tip.traces[cex].frames;
-            for (int k = 0; k < ui.size(); k++){
-                frames.push();
-                for (int l = 0; l < ui[k].size(); l++)
-                    frames.last().push(cl.modelValue(ui[k][l]));
-            }
-            tip.adaptTrace(frames);
+            extractTrace(frames);
             tip.safe_props[p].stat = pstat_Falsified;
             tip.safe_props[p].cex  = cex;
         }else
@@ -208,12 +231,7 @@ void BasicBmc::decideCycle()
                 // Property falsified, create and extract trace:
                 Trace             cex    = tip.newTrace();
                 vec<vec<lbool> >& frames = tip.traces[cex].frames;
-                for (int k = 0; k < ui.size(); k++){
-                    frames.push();
-                    for (int l = 0; l < ui[k].size(); l++)
-                        frames.last().push(cl.modelValue(ui[k][l]));
-                }
-                tip.adaptTrace(frames);
+                extractTrace(frames);
                 tip.live_props[p].stat = pstat_Falsified;
                 tip.live_props[p].cex  = cex;
             }else
@@ -235,7 +253,7 @@ void BasicBmc::printStats(bool final)
 {
     if (tip.verbosity >= 1){
         printf("[bmc] k=%3d, vrs=%8.3g, cls=%8.3g, con=%8.3g, time=%.1f s\n",
-               cycle-1, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts, solve_time);
+               cycle, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts, solve_time);
         if (final)
             s.printStats();
     }

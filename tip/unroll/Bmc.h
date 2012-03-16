@@ -31,17 +31,20 @@ namespace Tip {
 
 
 
-class BasicBmc {
+class BasicBmc : public UnrolledCirc {
     TipCirc&           tip;
     double             solve_time;
-    Circ               uc;         // Unrolled circuit.
-    vec<IFrame>        ui;         // Unrolled set of input frames.
-    UnrollCirc         unroll;     // Unroller-helper object.
-    Solver             s;          // SAT-solver and clausifyer for unrolled circuit.
+
+    // Circ               uc;         // Unrolled circuit.
+    // vec<IFrame>        ui;         // Unrolled set of input frames.
+    // UnrollCirc         unroll;     // Unroller-helper object.
+    // GMap<Sig>          umap;       // Reusable unroll-map.
+    Solver             s;           // SAT-solver and clausifyer for unrolled circuit.
     Clausifyer<Solver> cl;
-    GMap<Sig>          umap;       // Reusable unroll-map.
-    unsigned           cycle;      // Current cycle the circuit is unrolled to.
-    bool               check_live; // Indicates if liveness properties should be checked.
+
+    int                cycle;       // Current cycle the circuit is unrolled to.
+    bool               check_live;  // Indicates if liveness properties should be checked.
+    unsigned           orig_nflops; // Original number of flops (to be used for loop detection).
 
     unsigned           unresolved_safety;
     unsigned           unresolved_liveness;
@@ -56,6 +59,7 @@ class BasicBmc {
     vec<LiveCycle> live_data;
 
     void nextLiveness();
+    void extractTrace(vec<vec<lbool> >& frames);
 
 public:
     BasicBmc(TipCirc& t, bool check_live_ = true);
