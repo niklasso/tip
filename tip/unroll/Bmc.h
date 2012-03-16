@@ -64,6 +64,7 @@ class BasicBmc : public UnrolledCirc {
 public:
     BasicBmc(TipCirc& t, bool check_live_ = true);
 
+    bool proveSig   (Sig x);
     void unrollCycle();
     void decideCycle();
     bool done       ();

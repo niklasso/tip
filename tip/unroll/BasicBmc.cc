@@ -172,6 +172,15 @@ void BasicBmc::extractTrace(vec<vec<lbool> >& frames)
 }
 
 
+bool BasicBmc::proveSig(Sig x)
+{
+    double time_before = cpuTime();
+    bool   ret         = s.solve(~cl.clausify(unroll(x, cycle)));
+    solve_time += cpuTime() - time_before;
+    return !ret;
+}
+
+
 void BasicBmc::decideCycle()
 {
     double time_before = cpuTime();
