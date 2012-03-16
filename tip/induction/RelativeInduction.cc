@@ -186,7 +186,6 @@ namespace Tip {
             void             extractTrace (SharedRef<ScheduledClause> sc, vec<vec<lbool> >& frames);
 
 
-            void             extendLiveness(LiveProp p);
             void             extendLivenessUnaryShiftRegister(LiveProp p);
             void             extendLivenessUnaryForgive(LiveProp p);
             void             extendLivenessBinary(LiveProp p);
@@ -285,6 +284,8 @@ namespace Tip {
             // Prove or disprove all properties using depth k. Returns true if all properties are decided, and
             // false if there are still some unresolved property.
             bool decideCycle();
+            void extendLiveness(LiveProp p);
+            Sig  liveApprox    (LiveProp p);
 
             // Prove that the necessary number of initial cycles are bug free. Returns true if all properties
             // are resolved (i.e. all properties were falsifiable), and false otherwise.
@@ -583,6 +584,7 @@ namespace Tip {
             //event_cnts[p].h = flp;
         }
 
+        Sig  Trip::liveApprox    (LiveProp p){ return ~event_cnts[p].q; }
         void Trip::extendLiveness(LiveProp p)
         {
             if (live_enc == 0)
@@ -1324,7 +1326,7 @@ namespace Tip {
     void relativeInduction(TipCirc& tip, RipBmcMode bmc_mode)
     {
         double    time_before = cpuTime();
-        Trip      trip(tip, opt_pdepth, true);
+        Trip      trip(tip, opt_pdepth, false);
         BasicBmc* bmc = new BasicBmc(tip);
 
         // Necessary BMC for relative induction to be sound:
@@ -1334,6 +1336,21 @@ namespace Tip {
         //     bmc->decideCycle();
         //     bmc->printStats ();
         // }
+
+        for (int i = 0; !bmc->done() && i < opt_pdepth; i++){
+            bmc->unrollCycle();
+            bmc->decideCycle();
+
+            // Also check liveness approximations:
+            for (LiveProp p = 0; p < tip.live_props.size(); p++)
+                if (tip.live_props[p].stat == pstat_Unknown)
+                    if (!bmc->proveSig(trip.liveApprox(p))){
+                        printf("[bmc] event counter for liveness property %d increased\n", p);
+                        trip.extendLiveness(p);
+                    }
+
+            bmc->printStats ();
+        }
 
         // Take a few cheap extra BMC cycles:
         if (bmc_mode == ripbmc_Safe)
