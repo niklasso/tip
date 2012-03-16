@@ -140,8 +140,15 @@ namespace Tip {
 
             vec<Lit> assume;
             unsigned fails = 0;
-            for (uint32_t i = 0; ; i++){
+            for (uint32_t i = 0; fails < 2 && i < iters; i++){
                 int size_before = xs.size();
+
+                // Shuffle the order of literals to increase chance of other removal opportunities,
+                // except in first iteration:
+                static double seed = 12345678;
+                if (i > 0){
+                    randomShuffle(seed, xs);
+                    randomShuffle(seed, fix); }
 
                 // Join the set of fixed literals + plus the current minimized set 'xs'. It is
                 // important to place 'xs' last as this increases the likelyhood of those literals
@@ -167,14 +174,6 @@ namespace Tip {
                     if (verbose) printf("x");
                 }
 
-                // Terminate, or shuffle the order of literals to increase chance of other removal
-                // opportunities in next iteration:
-                static double seed = 12345678;
-                if (fails < 2 && i < iters){
-                    randomShuffle(seed, xs);
-                    randomShuffle(seed, fix);
-                }else
-                    break;
             }
             if (verbose) printf("\n");
 
