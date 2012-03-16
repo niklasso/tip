@@ -56,7 +56,7 @@ namespace Tip {
         BoolOption opt_fwd_revive   ("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", true);
         BoolOption opt_bwd_revive   ("RIP", "rip-bwd-rev",  "Use revival of backward-subsumed clauses", false);
         BoolOption opt_fwd_inst     ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
-        BoolOption opt_order_heur   ("RIP", "rip-order",    "Use generalization order heuristic", false);
+        IntOption  opt_order_heur   ("RIP", "rip-order", "Flop ordering (0=static, 1=count, 2=activity)", 0, IntRange(0,2));
         IntOption  opt_restart      ("RIP", "rip-restart",  "Use this interval for rip-engine restarts (0=off)", 8);
         BoolOption opt_restart_luby ("RIP", "rip-restart-luby", "Use luby sequence for rip-engine restarts", true);
         IntOption  opt_max_gen_tries("RIP", "rip-gen-tries","Max number of tries in clause generalization", 32);
@@ -77,7 +77,7 @@ namespace Tip {
             vec<Clause*>         F_inv;         // Invariant clauses.
             unsigned             n_inv;         // Number of active invariants.
             unsigned             n_total;       // Total number of active clauses.
-            GMap<int>            num_occ;       // Number of clause occurences for each gate.
+            GMap<float>          flop_act;      // Heuristic value of importance for each flop.
             uint32_t             luby_index;    // Luby sequence index.
             uint32_t             restart_cnt;   // Restart bound counter.
 
@@ -98,7 +98,7 @@ namespace Tip {
             bool                 fwd_revive;
             bool                 bwd_revive;
             bool                 fwd_inst;
-            bool                 order_heur;
+            uint32_t             order_heur;
             uint32_t             restart_ival;
             bool                 restart_luby;
             uint32_t             max_gen_tries;
@@ -205,11 +205,11 @@ namespace Tip {
             void             verifyInvariant ();
 
             Trip(TipCirc& t, unsigned prop_depth, bool start_at_depth_zero)
-                             : tip(t), n_inv(0), n_total(0), num_occ(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), 
+                             : tip(t), n_inv(0), n_total(0), flop_act(tip.main.lastGate(), 0), luby_index(0), restart_cnt(0), 
 
                                init(t, opt_cnf_level),
-                               prop(t, F, F_inv, event_cnts, opt_cnf_level, opt_max_min_tries, start_at_depth_zero ? 0 : prop_depth, opt_use_ind, opt_use_uniq),
-                               step(t, F, F_inv, event_cnts, opt_cnf_level, opt_max_min_tries),
+                               prop(t, F, F_inv, event_cnts, flop_act, opt_cnf_level, opt_max_min_tries, start_at_depth_zero ? 0 : prop_depth, opt_use_ind, opt_use_uniq),
+                               step(t, F, F_inv, event_cnts, flop_act, opt_cnf_level, opt_max_min_tries),
 
                                fwd_revive   (opt_fwd_revive),
                                bwd_revive   (opt_bwd_revive),
@@ -241,6 +241,9 @@ namespace Tip {
             {
                 F.push();
                 F_size.push(0);
+
+                for (int i = 0; i < tip.flps.size(); i++)
+                    flop_act[tip.flps[i]] = i / (float)tip.flps.size();
 
                 event_cnts.growTo(tip.live_props.size());
                 if (live_enc == 0){
@@ -303,26 +306,12 @@ namespace Tip {
             void printFinalStats();
         };
 
-        class SigCmp {
-            const GMap<int>& num_occ;
-        public:            
-            SigCmp(const GMap<int>& num_occ_) : num_occ(num_occ_){}
-
-            bool operator()(Sig x, Sig y) const { 
-                assert(num_occ.has(gate(x)));
-                assert(num_occ.has(gate(y)));
-                int num_x = num_occ[gate(x)];
-                int num_y = num_occ[gate(y)];
-                //return num_x < num_y || (num_x == num_y && x < y); }
-                return num_x < num_y; }
-        };
-
         void Trip::scheduleGeneralizeOrder(const Clause& c, vec<Sig>& try_remove)
         {
             for (unsigned i = 0; i < c.size(); i++)
                 try_remove.push(c[i]);
-            if (order_heur)
-                sort(try_remove, SigCmp(num_occ));
+            //if (order_heur)
+            sort(try_remove, SigActLt(flop_act));
         }
 
         void Trip::generalize(Clause& c)
@@ -505,7 +494,7 @@ namespace Tip {
             Sig out = tip.main.mkMux(evt, event_cnts[p].q, flp);
             tip.flps.define(gate(flp), out);
 
-            num_occ.growTo(tip.main.lastGate(), 0);
+            flop_act.growTo(tip.main.lastGate(), 0);
 
             // Add that the new target can not be falsified up to the current cycle:
             vec<Sig> cls;
@@ -535,7 +524,7 @@ namespace Tip {
             Sig qpr = tip.main.mkAnd(event_cnts[p].q, flp);
             tip.flps.define(gate(flp), out);
 
-            num_occ.growTo(tip.main.lastGate(), 0);
+            flop_act.growTo(tip.main.lastGate(), 0);
 
             // Add that the new target can not be falsified up to the current cycle:
             vec<Sig> cls;
@@ -564,7 +553,7 @@ namespace Tip {
             Sig cry = tip.main.mkAnd(event_cnts[p].q, flp);
             tip.flps.define(gate(flp), sum);
 
-            num_occ.growTo(tip.main.lastGate(), 0);
+            flop_act.growTo(tip.main.lastGate(), 0);
 
             // // Add that the new target can not be falsified up to the current cycle:
             // vec<Sig> cls;
@@ -678,12 +667,10 @@ namespace Tip {
             n_total--;
             step.resetCycle(c->cycle, F_size[c->cycle]);
 
-            // Decrease occurrence counts:
-            for (unsigned i = 0; i < c->size(); i++){
-                assert(num_occ.has(gate((*c)[i])));
-                num_occ[gate((*c)[i])]--;
-                assert(num_occ[gate((*c)[i])] >= 0);
-            }
+            if (order_heur == 1)
+                // Decrease flop activities:
+                for (unsigned i = 0; i < c->size(); i++)
+                    flop_act[gate((*c)[i])] -= 1.0;
 
             // While removing from the last cycle, the set can not become empty:
             assert(c->cycle < (unsigned)size());
@@ -734,9 +721,20 @@ namespace Tip {
             n_total++;
             cls_added++;
 
-            // Increase occurrence counts:
-            for (unsigned i = 0; i < c.size(); i++)
-                num_occ[gate(c[i])]++;
+            if (order_heur == 2){
+                // Decay flop activities:
+                for (int i = 0; i < tip.flps.size(); i++)
+                    flop_act[tip.flps[i]] *= 0.99;
+            }
+
+            if (order_heur > 0){
+                // Increase flop activities:
+                float val = 1.0;
+                if (order_heur == 2 && c.cycle == cycle_Undef)
+                    val = (c.cycle+1) / c.size();
+                for (unsigned i = 0; i < c.size(); i++)
+                    flop_act[gate(c[i])] += val;
+            }
 
             prop.addClause(c);
             step.addClause(c);

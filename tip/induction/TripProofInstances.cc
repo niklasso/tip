@@ -696,13 +696,29 @@ namespace Tip {
             assert(solver->modelValue(l) == l_False);
             // Found predecessor state to a bad state:
             flops.clear();
-            uc.extractUsedFlops(0, flops);
+#if 1
+                for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit)
+                    if (uc.lookup(*flit, 0) != sig_Undef)
+                        flops.push(mkSig(*flit));
+                sort(flops, SigActGt(flop_act));
+                //sort(flops, SigActLt(flop_act));
+                for (int i = 0; i < flops.size(); i++)
+                    flops[i] = uc.lookup(flops[i], 0);
+#else
+                uc.extractUsedFlops(0, flops);
+#endif
             subModel(flops,   *cl, flops_set);
             subModel(inputs,  *cl, inputs_set);
             subModel(outputs, *cl, outputs_set);
             outputs_set.insert(~uc.lookup(p, depth()));
             assert(cl->modelValue(~uc.lookup(p, depth())) == l_True);
             shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 3);
+
+            if (tip.verbosity >= 3){
+                float total = 0;
+                for (int i = 0; i < flops_set.size(); i++)
+                    total += flop_act[gate(flops_set[i])];
+                printf("[PropInstance::prove] act = %4.2f sum\n", total); }
 
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
@@ -738,9 +754,10 @@ namespace Tip {
     }
 
 
-    PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_,
+    PropInstance::PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, GMap<float>& flop_act_,
                                int cnf_level_, uint32_t max_min_tries_, int depth, bool use_ind_, bool use_uniq_)
-        : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0),
+        : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), flop_act(flop_act_), 
+          uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0),
           cnf_level(cnf_level_), max_min_tries(max_min_tries_), depth_(depth), use_ind(use_ind_), use_uniq(use_uniq_)
     {
         reset(depth_);
@@ -915,9 +932,15 @@ namespace Tip {
                     actives.push(activate[i]);
                 }
 
+        vec<Sig> clause;
+        for (unsigned i = 0; i < c.size(); i++)
+            clause.push(c[i]);
+        //sort(clause, SigActLt(flop_act));
+        sort(clause, SigActGt(flop_act));
+
         // Assume negation of clause 'c' (outgoing):
-        for (unsigned i = 0; i < c.size(); i++){
-            Sig x = tip.flps.next(gate(c[i])) ^ sign(c[i]);
+        for (int i = 0; i < clause.size(); i++){
+            Sig x = tip.flps.next(gate(clause[i])) ^ sign(clause[i]);
             Lit l = cl->clausify(uc.unroll(x, 0));
             assumes.push(~l);
         }
@@ -967,7 +990,18 @@ namespace Tip {
             // Found a counter-example:
             if (next != NULL){
                 flops.clear();
+#if 1
+                for (TipCirc::FlopIt flit = tip.flpsBegin(); flit != tip.flpsEnd(); ++flit)
+                    if (uc.lookup(*flit, 0) != sig_Undef)
+                        flops.push(mkSig(*flit));
+
+                //sort(flops, SigActLt(flop_act));
+                sort(flops, SigActGt(flop_act));
+                for (int i = 0; i < flops.size(); i++)
+                    flops[i] = uc.lookup(flops[i], 0);
+#else
                 uc.extractUsedFlops(0, flops);
+#endif
                 subModel(flops,   *cl, flops_set);
                 subModel(inputs,  *cl, inputs_set);
 
@@ -981,6 +1015,11 @@ namespace Tip {
 
                 shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 3);
 
+                if (tip.verbosity >= 3){
+                    float total = 0;
+                    for (int i = 0; i < flops_set.size(); i++)
+                        total += flop_act[gate(flops_set[i])];
+                    printf("[StepInstance::prove] cycle = %d, act = %4.2f sum\n", c.cycle-1, total); }
 
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
@@ -1036,8 +1075,10 @@ namespace Tip {
         return prove(c, yes, dummy);
     }
 
-    StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, int cnf_level_, uint32_t max_min_tries_)
-        : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0), cnf_level(cnf_level_), max_min_tries(max_min_tries_)
+    StepInstance::StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, GMap<float>& flop_act_,
+                               int cnf_level_, uint32_t max_min_tries_)
+        : tip(t), F(F_), F_inv(F_inv_), event_cnts(event_cnts_), flop_act(flop_act_),
+          uc(t), solver(NULL), cl(NULL), act_cnstrs(lit_Undef), cpu_time(0), cnf_level(cnf_level_), max_min_tries(max_min_tries_)
     {
         reset();
     }

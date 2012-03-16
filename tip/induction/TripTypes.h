@@ -218,6 +218,32 @@ namespace Tip {
         ScheduledClause() : refc_(0), next(NULL){}
     };
 
+    class SigActLt {
+        const GMap<float>& flop_act;
+    public:
+        SigActLt(const GMap<float>& flop_act_) : flop_act(flop_act_){}
+
+        bool operator()(Sig x, Sig y) const {
+            assert(flop_act.has(gate(x)));
+            assert(flop_act.has(gate(y)));
+            float num_x = flop_act[gate(x)];
+            float num_y = flop_act[gate(y)];
+            return num_x < num_y; }
+    };
+
+    class SigActGt {
+        const GMap<float>& flop_act;
+    public:
+        SigActGt(const GMap<float>& flop_act_) : flop_act(flop_act_){}
+
+        bool operator()(Sig x, Sig y) const {
+            assert(flop_act.has(gate(x)));
+            assert(flop_act.has(gate(y)));
+            float num_x = flop_act[gate(x)];
+            float num_y = flop_act[gate(y)];
+            return num_x > num_y; }
+    };
+
 
     // Check if clause 'c' subsumes 'd'. This means that 'c' is a subset of 'd' and 'c' holds
     // longer than (or as long as) 'd'.

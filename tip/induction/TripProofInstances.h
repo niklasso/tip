@@ -149,6 +149,7 @@ namespace Tip {
         const vec<vec<Clause*> >& F;
         const vec<Clause*>&       F_inv;
         const vec<EventCounter>&  event_cnts;
+        const GMap<float>&        flop_act;
         
         UnrolledCirc   uc;              // Unrolled circuit.
         SimpSolver     *solver;
@@ -182,7 +183,7 @@ namespace Tip {
         void clearClauses();
         void addClause   (const Clause& c);
         
-        PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_,
+        PropInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, GMap<float>& flop_act_,
                      int cnf_level_, uint32_t max_min_tries_, int depth_, bool use_ind_, bool use_uniq_);
         ~PropInstance();
         
@@ -203,6 +204,7 @@ namespace Tip {
         const vec<vec<Clause*> >& F;
         const vec<Clause*>&       F_inv;
         const vec<EventCounter>&  event_cnts;
+        const GMap<float>&        flop_act;
         
         UnrolledCirc   uc;              // Unrolled circuit.
         SimpSolver     *solver;
@@ -232,7 +234,8 @@ namespace Tip {
 
         void resetCycle(unsigned cycle, unsigned num_clauses);
 
-        StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, int cnf_level_, uint32_t max_min_tries_);
+        StepInstance(const TipCirc& t, const vec<vec<Clause*> >& F_, const vec<Clause*>& F_inv_, const vec<EventCounter>& event_cnts_, GMap<float>& flop_act_, 
+                     int cnf_level_, uint32_t max_min_tries_);
         ~StepInstance();
         
         bool prove(const Clause& c, Clause& yes, SharedRef<ScheduledClause>& no, SharedRef<ScheduledClause> next = NULL);
