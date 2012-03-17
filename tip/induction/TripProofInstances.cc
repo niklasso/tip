@@ -23,6 +23,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "tip/induction/TripProofInstances.h"
 
 //#define VERBOSE_DEBUG
+#define CNF_ASYMM_LIMIT 16000 // FIXME: do something nicer than this limit.
 
 namespace Tip {
 
@@ -324,7 +325,7 @@ namespace Tip {
 
         // Simplify CNF:
         if (cnf_level >= 2){
-            solver->use_asymm = true;
+            solver->use_asymm = tip.main.nGates() < CNF_ASYMM_LIMIT;
             solver->grow = 2;
         }
 
@@ -613,7 +614,7 @@ namespace Tip {
 
         // Simplify CNF:
         if (cnf_level >= 2){
-            solver->use_asymm = true;
+            solver->use_asymm = tip.main.nGates() < CNF_ASYMM_LIMIT;
             solver->grow = 2;
         }
 
@@ -874,7 +875,7 @@ namespace Tip {
 
         // Simplify CNF:
         if (cnf_level >= 2){
-            solver->use_asymm = true;
+            solver->use_asymm = tip.main.nGates() < CNF_ASYMM_LIMIT;
             solver->grow = 2;
         }
 
