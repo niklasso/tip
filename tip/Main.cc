@@ -62,7 +62,7 @@ int main(int argc, char** argv)
     BoolOption   fce_prop("MAIN", "fce-prop", "Use liveness properties in fairness constraint extraction.", true);
     BoolOption   prof ("MAIN", "prof", "(temporary) Use bad signal-handler to help gprof.", false);
     BoolOption   coif ("MAIN", "coif", "Use initial cone-of-influence reduction.", true);
-    IntOption    td   ("MAIN", "td",   "Use temporal decomposition (-1=none, otherwise minimum unrolling).", 0, IntRange(-1, INT32_MAX));
+    IntOption    td   ("MAIN", "td",   "Use temporal decomposition (-1=none, otherwise minimum unrolling).", 2, IntRange(-1, INT32_MAX));
     IntOption    tdmax("MAIN", "tdmax","Max cycles for temporal decomposition.", 32, IntRange(0, INT32_MAX));
     BoolOption   xsafe("MAIN", "xsafe", "Extract extra safety properties.", false);
     StringOption alg  ("MAIN", "alg", "Main model checking algorithm to use.", "rip");

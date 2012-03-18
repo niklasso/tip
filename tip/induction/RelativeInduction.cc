@@ -53,7 +53,7 @@ namespace Tip {
         //===================================================================================================
         // Temporal Relative Induction Prover:
 
-        BoolOption opt_fwd_revive   ("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", false);
+        BoolOption opt_fwd_revive   ("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", true);
         BoolOption opt_bwd_revive   ("RIP", "rip-bwd-rev",  "Use revival of backward-subsumed clauses", false);
         BoolOption opt_fwd_inst     ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
         BoolOption opt_order_heur   ("RIP", "rip-order",    "Use generalization order heuristic", false);
@@ -63,8 +63,8 @@ namespace Tip {
         IntOption  opt_max_min_tries("RIP", "rip-min-tries","Max number of tries in model minimization", 32);
         IntOption  opt_live_enc     ("RIP", "rip-live-enc", "Incremental liveness encoding", 0, IntRange(0,2));
         IntOption  opt_cnf_level    ("RIP", "rip-cnf", "Effort level for CNF simplification (0-2)", 1, IntRange(0,2));
-        IntOption  opt_pdepth       ("RIP", "rip-pdepth", "Depth of property instance.", 1, IntRange(0,INT32_MAX));
-        BoolOption opt_use_ind      ("RIP", "rip-use-ind", "Use property in induction hypothesis", false);
+        IntOption  opt_pdepth       ("RIP", "rip-pdepth", "Depth of property instance.", 4, IntRange(0,INT32_MAX));
+        BoolOption opt_use_ind      ("RIP", "rip-use-ind", "Use property in induction hypothesis", true);
         BoolOption opt_use_uniq     ("RIP", "rip-use-uniq", "Use unique state induction", false);
 
 
