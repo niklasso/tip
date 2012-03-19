@@ -243,7 +243,7 @@ namespace Tip {
                 F_size.push(0);
 
                 for (int i = 0; i < tip.flps.size(); i++)
-                    flop_act[tip.flps[i]] = i / (float)tip.flps.size();
+                    flop_act[tip.flps[i]] = (tip.flps.size() - i - 1) / (float)tip.flps.size();
 
                 event_cnts.growTo(tip.live_props.size());
                 if (live_enc == 0){
