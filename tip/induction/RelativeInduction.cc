@@ -56,7 +56,7 @@ namespace Tip {
         BoolOption opt_fwd_revive   ("RIP", "rip-fwd-rev",  "Use revival of forward-subsumed clauses", true);
         BoolOption opt_bwd_revive   ("RIP", "rip-bwd-rev",  "Use revival of backward-subsumed clauses", false);
         BoolOption opt_fwd_inst     ("RIP", "rip-fwd-inst", "Instantiate proved clauses multiple cycles", true);
-        IntOption  opt_order_heur   ("RIP", "rip-order", "Flop ordering (0=static, 1=count, 2=activity)", 0, IntRange(0,2));
+        IntOption  opt_order_heur   ("RIP", "rip-order", "Flop ordering (0=static, 1=count, 2=activity)", 1, IntRange(0,2));
         IntOption  opt_restart      ("RIP", "rip-restart",  "Use this interval for rip-engine restarts (0=off)", 8);
         BoolOption opt_restart_luby ("RIP", "rip-restart-luby", "Use luby sequence for rip-engine restarts", true);
         IntOption  opt_max_gen_tries("RIP", "rip-gen-tries","Max number of tries in clause generalization", 32);
