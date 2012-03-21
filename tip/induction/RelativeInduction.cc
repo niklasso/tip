@@ -66,6 +66,7 @@ namespace Tip {
         IntOption  opt_pdepth       ("RIP", "rip-pdepth", "Depth of property instance.", 4, IntRange(0,INT32_MAX));
         BoolOption opt_use_ind      ("RIP", "rip-use-ind", "Use property in induction hypothesis", true);
         BoolOption opt_use_uniq     ("RIP", "rip-use-uniq", "Use unique state induction", false);
+        DoubleOption opt_push_limit ("RIP", "rip-push-lim", "Fraction of total clauses which triggers a new push iteration", 0, DoubleRange(0,true, HUGE_VAL, true));
 
 
         class Trip {
@@ -81,6 +82,7 @@ namespace Tip {
             uint32_t             luby_index;    // Luby sequence index.
             uint32_t             restart_cnt;   // Restart bound counter.
             int                  safe_depth;    // Largest depth at which all active properties are implied.
+            uint64_t             last_push;     // Number of clauses added at last call to 'pushClauses()'.
 
             vec<vec<SharedRef<ScheduledClause> > >
                                  clause_queue;
@@ -105,6 +107,7 @@ namespace Tip {
             uint32_t             max_gen_tries;
             uint32_t             live_enc;
             uint32_t             goal_depth;
+            double               push_limit;
 
             // Statistics:
             double               cpu_time;
@@ -207,7 +210,7 @@ namespace Tip {
 
             Trip(TipCirc& t, unsigned prop_depth, bool start_at_depth_zero)
                              : tip(t), n_inv(0), n_total(0), flop_act(tip.main.lastGate(), 0), 
-                               luby_index(0), restart_cnt(0),safe_depth(-1),
+                               luby_index(0), restart_cnt(0),safe_depth(-1), last_push(0),
 
                                init(t, opt_cnf_level),
                                prop(t, F, F_inv, event_cnts, flop_act, opt_cnf_level, opt_max_min_tries, start_at_depth_zero ? 0 : prop_depth, opt_use_ind, opt_use_uniq),
@@ -222,6 +225,7 @@ namespace Tip {
                                max_gen_tries(opt_max_gen_tries),
                                live_enc     (opt_live_enc),
                                goal_depth   (prop_depth),
+                               push_limit   (opt_push_limit),
 
                                cpu_time  (0),
 
@@ -994,6 +998,11 @@ namespace Tip {
 
         void Trip::pushClauses()
         {
+            if (cls_added - last_push < (uint64_t)((double)n_total * push_limit)){
+                if (tip.verbosity >= 3) printf("[pushClauses] skipped\n");
+                return; }
+            last_push = cls_added;
+
             Clause c,d;
             assert(F.size() > 0);
 
