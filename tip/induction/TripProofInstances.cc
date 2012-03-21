@@ -725,12 +725,6 @@ namespace Tip {
             assert(cl->modelValue(~uc.lookup(p, depth())) == l_True);
             shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 3);
 
-            if (tip.verbosity >= 3){
-                float total = 0;
-                for (int i = 0; i < flops_set.size(); i++)
-                    total += flop_act[gate(flops_set[i])];
-                printf("[PropInstance::prove] act = %4.2f sum\n", total); }
-
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
             for (unsigned k = 0; k <= depth(); k++)
@@ -1025,12 +1019,6 @@ namespace Tip {
                 outputs.shrink(c.size());
 
                 shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 3);
-
-                if (tip.verbosity >= 3){
-                    float total = 0;
-                    for (int i = 0; i < flops_set.size(); i++)
-                        total += flop_act[gate(flops_set[i])];
-                    printf("[StepInstance::prove] cycle = %d, act = %4.2f sum\n", c.cycle-1, total); }
 
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;
