@@ -323,6 +323,9 @@ namespace Tip {
         for (int i = 0; i < used.size(); i++)
             solver->freezeVar(var(cl->clausify(used[i])));
 
+        // Needed below (may change in the future):
+        cl->clausify(gate_True);
+
         // Simplify CNF:
         if (cnf_level >= 2){
             solver->use_asymm = tip.main.nGates() < CNF_ASYMM_LIMIT;
