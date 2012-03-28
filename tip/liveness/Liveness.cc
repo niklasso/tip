@@ -245,14 +245,28 @@ void checkLiveness(TipCirc& tip, int k)
     }
 #endif
     
+#if 0
+    // Koen's old version.
     Sig x = sig_True;
-    for ( int i = 0; i < k; i++ ) {
+    for ( int i = 0; i <= k; i++ ) {
         Gate y = gate(tip.main.mkInp());
         Sig justx = tip.main.mkAnd(just,x);
         tip.flps.define(y, tip.main.mkOr(justx,mkSig(y)));
         x = mkSig(y);
-        tip.newSafeProp(~x);
     }
+#else
+    // Forgive-counter:
+    Sig x = just;
+    for ( int i = 0; i < k; i++ ) {
+        Sig flp = tip.main.mkInp();
+        Sig out = tip.main.mkOr (x, flp);
+        x       = tip.main.mkAnd(x, flp);
+        tip.flps.define(gate(flp), out);
+    }
+#endif
+
+    tip.newSafeProp(~x);
+
     tip.live_props.clear();
     printf("--- calling safety checker ---\n");
     tip.trip();
