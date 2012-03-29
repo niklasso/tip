@@ -45,24 +45,8 @@ void embedLivenessBiere(TipCirc& tip, int kind)
             just = tip.live_props[p].sigs[0];
         }
 
-#if 0
-    if ( tip.cnstrs.size() > 0 ) {
-        printf("Preparing for %d constraints.\n", tip.cnstrs.size());
-        Sig conj = sig_True;
-        for ( uint32_t i = 0; i < tip.cnstrs.size(); i++ ) {
-            ;
-            if ( tip.cnstrs[i].size() > 0 )
-                for ( int j = 0; j < tip.cnstrs[i].size(); j++ )
-                    conj = tip.main.mkAnd(conj, tip.main.mkOr(~(j > 0 ? tip.cnstrs[i][j-1] : tip.cnstrs[i].last()), tip.cnstrs[i][j]));
-        }
-
-        Gate next_conj = gate(tip.main.mkInp());
-        Sig conj_ = tip.main.mkAnd(mkSig(next_conj), conj);
-        tip.flps.define(next_conj, conj_, sig_True);
-        just = tip.main.mkAnd(just, conj_);
-        tip.cnstrs.clear();
-    }
-#endif
+    if (just == sig_Undef)
+        return;
     
     // implementing Biere circuit
     Sig bad = sig_False;
@@ -226,25 +210,9 @@ void checkLiveness(TipCirc& tip, int k)
             just = tip.live_props[p].sigs[0];
         }
 
-#if 0
-    if ( tip.cnstrs.size() > 0 ) {
-        printf("Preparing for %d constraints.\n", tip.cnstrs.size());
-        Sig conj = sig_True;
-        for ( uint32_t i = 0; i < tip.cnstrs.size(); i++ ) {
-            ;
-            if ( tip.cnstrs[i].size() > 0 )
-                for ( int j = 0; j < tip.cnstrs[i].size(); j++ )
-                    conj = tip.main.mkAnd(conj, tip.main.mkOr(~(j > 0 ? tip.cnstrs[i][j-1] : tip.cnstrs[i].last()), tip.cnstrs[i][j]));
-        }
+    if (just == sig_Undef)
+        return;
 
-        Gate next_conj = gate(tip.main.mkInp());
-        Sig conj_ = tip.main.mkAnd(mkSig(next_conj), conj);
-        tip.flps.define(next_conj, conj_, sig_True);
-        just = tip.main.mkAnd(just, conj_);
-        tip.cnstrs.clear();
-    }
-#endif
-    
 #if 0
     // Koen's old version.
     Sig x = sig_True;
