@@ -1,4 +1,14 @@
 ================================================================================
+Overview
+
+Tip is a SAT based model checker. The name stands for "Temporal
+Induction Prover" as it mainly uses inductive model checking
+techniques. Circuits and properties are parsed via the AIGER file
+format and Tip supports most current AIGER features (safety
+properties, liveness properties, constraints, multiple properties,
+etc).
+
+================================================================================
 Quick Install
 
 - Install MiniSat and Mini Circuit Library. Below the location of
