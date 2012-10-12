@@ -190,6 +190,44 @@ namespace Tip {
         printf("  Unknown:    %d\n", n_unknown);
     }
 
+    void TipCirc::openResultFile(const char* file)
+    {
+        if ( resultFile )
+            printf("ERROR! resultFile is already in use.\n"), exit(1);
+        resultFile = fopen(file, "w");
+        if (!resultFile)
+             printf("ERROR! Failed to open results file: %s\n", file), exit(1);
+    }
+
+    void TipCirc::writeResultSafe(SafeProp p)
+    {
+        if ( resultFile ) {
+            if (safe_props[p].stat == pstat_Falsified){
+                fprintf(resultFile, "1\nb%d\n", p);
+                printTraceAiger(resultFile, safe_props[p].cex);
+                fprintf(resultFile, ".\n");
+            }else if (safe_props[p].stat == pstat_Proved){
+                fprintf(resultFile, "0\nb%d\n", p);
+                fprintf(resultFile, ".\n");
+            }
+            fflush(resultFile);
+        }
+    }
+
+    void TipCirc::writeResultLive(LiveProp p)
+    {
+        if ( resultFile ) {
+            if (live_props[p].stat == pstat_Falsified){
+                fprintf(resultFile, "1\nj%d\n", p);
+                printTraceAiger(resultFile, live_props[p].cex);
+                fprintf(resultFile, ".\n");
+            }else if (live_props[p].stat == pstat_Proved){
+                fprintf(resultFile, "0\nj%d\n", p);
+                fprintf(resultFile, ".\n");
+            }
+            fflush(resultFile);
+        }
+    }
 
     void TipCirc::writeResultsAiger(FILE* out) const {
         // TODO: Collapse properties that use the same counter example trace.

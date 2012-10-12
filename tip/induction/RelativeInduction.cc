@@ -1180,12 +1180,14 @@ namespace Tip {
                                 tip.adaptTrace(frames);
                                 tip.safe_props[p].stat   = pstat_Falsified;
                                 tip.safe_props[p].cex    = cex;
+                                tip.writeResultSafe(p);
                                 break;
                             }
                         }else if (prop_res == l_True){
                             // 'p' is implied by the invariants.
                             tip.safe_props[p].stat = pstat_Proved;
                             printf("[decideCycle] safety property %d was proved!\n", p);
+                            tip.writeResultSafe(p);
                         }else if (prop_res == l_Undef){
                             // Done with 'p' for this cycle:
                             unresolved++;
@@ -1224,6 +1226,7 @@ namespace Tip {
                             // 'p' is implied by the invariants.
                             tip.live_props[p].stat = pstat_Proved;
                             printf("[decideCycle] liveness property %d was proved with k=%d!\n", p, event_cnts[p].k);
+                            tip.writeResultLive(p);
                         }else if (prop_res == l_Undef){
                             // Done with 'p' for this cycle:
                             unresolved++;

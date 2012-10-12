@@ -219,6 +219,7 @@ void BasicBmc::decideCycle()
             extractTrace(frames);
             tip.safe_props[p].stat = pstat_Falsified;
             tip.safe_props[p].cex  = cex;
+            tip.writeResultSafe(p);
         }else
             unresolved_safety++;
     }
@@ -243,6 +244,7 @@ void BasicBmc::decideCycle()
                 extractTrace(frames);
                 tip.live_props[p].stat = pstat_Falsified;
                 tip.live_props[p].cex  = cex;
+                tip.writeResultLive(p);
             }else
                 unresolved_liveness++;
         }

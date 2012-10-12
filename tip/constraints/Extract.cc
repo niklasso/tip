@@ -860,6 +860,7 @@ void fairnessConstraintExtraction(TipCirc& tip, int level, bool use_prop)
             else{
                 printf("*** Derived fairness constraints trivially solves property!\n");
                 tip.live_props[p].stat = pstat_Proved;
+                tip.writeResultLive(p);
             }
 
             printf("[fce] Liveness property %d: time=%.1f s, #solves=%d, #confl=%d, #dec=%d\n", 

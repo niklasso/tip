@@ -83,6 +83,10 @@ int main(int argc, char** argv)
     tc.stats();
     tc.verbosity = verb;
 
+    // check if result file is specified
+    if (argc == 3){
+        tc.openResultFile(argv[2]);
+    }
 
     // Choose aut-modes based on presence of liveness properties:
     unsigned num_live = 0;
@@ -157,13 +161,5 @@ int main(int argc, char** argv)
         bmcLivenessBiere(tc,kind);
 
     tc.printResults();
-
-    if (argc == 3){
-        FILE* res = fopen(argv[2], "w");
-        if (!res) printf("ERROR! Failed to open results file: %s\n", argv[2]), exit(1);
-        tc.writeResultsAiger(res);
-        fclose(res);
-    }
-
     return 0;
 }

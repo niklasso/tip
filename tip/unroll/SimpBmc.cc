@@ -180,6 +180,7 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
                 printf (" ... property falsified, created trace = %d of length %d.\n", cex, frames.size());
                 tip.safe_props[p].stat = pstat_Falsified;
                 tip.safe_props[p].cex  = cex;
+                tip.writeResultSafe(p);
             }else{
                 unresolved_safety++;
                 assert(s.value(plit) == l_True);

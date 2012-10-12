@@ -174,8 +174,8 @@ private:
 
 class TipCirc : public SeqCirc {
 public:
-    TipCirc() : tradaptor(NULL), verbosity(0){}
-    ~TipCirc(){ delete tradaptor; }
+    TipCirc() : tradaptor(NULL), resultFile(NULL), verbosity(0){}
+    ~TipCirc(){ delete tradaptor; if (resultFile) fclose(resultFile);}
 
     //---------------------------------------------------------------------------------------------
     // Top-level user API:
@@ -186,6 +186,9 @@ public:
     void writeAiger        (const char* file) const;
     void writeResultsAiger (FILE* out) const;
     void printResults      () const;
+    void openResultFile    (const char* file);
+    void writeResultSafe   (SafeProp p);
+    void writeResultLive   (LiveProp p);
 
     void bmc               (uint32_t begin_cycle, uint32_t stop_cycle, BmcVersion bver = bmc_Basic);
     void sce               (bool use_minimize_alg = true, bool only_coi = false);
@@ -214,6 +217,8 @@ public:
     vec<Sig>          fairs;       // Set of fairness constraints.
     TraceAdaptor*     tradaptor;   // Trace adaptor to compensate trace changing transformations.
 
+    FILE*             resultFile;  // File to write results to, incrementally
+    
     // TODO:
     //   - fairness constraints.
     //   - circuit outputs?
