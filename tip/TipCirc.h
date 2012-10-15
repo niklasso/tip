@@ -223,10 +223,14 @@ public:
     //   - fairness constraints.
     //   - circuit outputs?
 
-    SafeProp newSafeProp (Sig x);
-    LiveProp newLiveProp (const vec<Sig>& x);
-    Trace    newTrace    ();
-    void     adaptTrace  (vec<vec<lbool> >& frames);
+    SafeProp newSafeProp     (Sig x);
+    LiveProp newLiveProp     (const vec<Sig>& x);
+    Trace    newTrace        ();
+    void     adaptTrace      (vec<vec<lbool> >& frames);
+    void     setProvenSafe   (SafeProp p, const char* engine = NULL);
+    void     setProvenLive   (LiveProp p, const char* engine = NULL);
+    void     setFalsifiedSafe(SafeProp p, Trace, const char* engine = NULL);
+    void     setFalsifiedLive(LiveProp p, Trace, const char* engine = NULL);
 
     void     extractRoots(vec<Sig>& xs);
     void     updateRoots (GMap<Sig>& cmap);

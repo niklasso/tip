@@ -1173,21 +1173,16 @@ namespace Tip {
                             cands_total_removed += tip.flps.size() - pred->size();
                             if (!proveRec(pred, start)){
                                 // 'p' was falsified.
-                                printf("[decideCycle] safety property %d was falsified!\n", p);
                                 Trace             cex    = tip.newTrace();
                                 vec<vec<lbool> >& frames = tip.traces[cex].frames;
                                 extractTrace(start, frames);
                                 tip.adaptTrace(frames);
-                                tip.safe_props[p].stat   = pstat_Falsified;
-                                tip.safe_props[p].cex    = cex;
-                                tip.writeResultSafe(p);
+                                tip.setFalsifiedSafe(p, cex, "rip");
                                 break;
                             }
                         }else if (prop_res == l_True){
                             // 'p' is implied by the invariants.
-                            tip.safe_props[p].stat = pstat_Proved;
-                            printf("[decideCycle] safety property %d was proved!\n", p);
-                            tip.writeResultSafe(p);
+                            tip.setProvenSafe(p, "rip");
                         }else if (prop_res == l_Undef){
                             // Done with 'p' for this cycle:
                             unresolved++;
@@ -1224,9 +1219,7 @@ namespace Tip {
                             }
                         }else if (prop_res == l_True){
                             // 'p' is implied by the invariants.
-                            tip.live_props[p].stat = pstat_Proved;
-                            printf("[decideCycle] liveness property %d was proved with k=%d!\n", p, event_cnts[p].k);
-                            tip.writeResultLive(p);
+                            tip.setProvenLive(p, "rip");
                         }else if (prop_res == l_Undef){
                             // Done with 'p' for this cycle:
                             unresolved++;
