@@ -80,8 +80,8 @@ ECHO=#
 VERB=
 endif
 
-SRCS = $(wildcard tip/*.cc) $(wildcard tip/bmc/*.cc)
-HDRS = $(wildcard tip/*.h) $(wildcard tip/bmc/*.h)
+SRCS = $(wildcard tip/*.cc) $(wildcard tip/*/*.cc)
+HDRS = $(wildcard tip/*.h) $(wildcard tip/*/*.h)
 OBJS = $(filter-out %Main.o, $(SRCS:.cc=.o))
 
 r:	$(BUILD_DIR)/release/bin/$(TIP)
