@@ -161,6 +161,58 @@ namespace Tip {
                
     }
 
+    void TipCirc::setProvenSafe   (SafeProp p, const char* engine)
+    {
+        if (verbosity >= 1){
+            printf("[tip] Safety property %d was proved", p);
+            if (engine != NULL)
+                printf(" (%s)", engine);
+            printf("\n");
+        }
+        safe_props[p].stat = pstat_Proved;
+        writeResultSafe(p);
+    }
+
+    void TipCirc::setProvenLive   (LiveProp p, const char* engine)
+    {
+        if (verbosity >= 1){
+            printf("[tip] Liveness property %d was proved", p);
+            if (engine != NULL)
+                printf(" (%s)", engine);
+            printf("\n");
+        }
+        live_props[p].stat = pstat_Proved;
+        writeResultLive(p);
+    }
+
+    void TipCirc::setFalsifiedSafe(SafeProp p, Trace cex, const char* engine)
+    {
+        if (verbosity >= 1){
+            printf("[tip] Safety property %d was falsified", p);
+            if (engine != NULL)
+                printf(" (%s)", engine);
+            printf("\n");
+        }
+        safe_props[p].stat = pstat_Falsified;
+        safe_props[p].cex  = cex;
+        writeResultSafe(p);
+    }
+
+
+    void TipCirc::setFalsifiedLive(LiveProp p, Trace cex, const char* engine)
+    {
+        if (verbosity >= 1){
+            printf("[tip] Liveness property %d was falsified", p);
+            if (engine != NULL)
+                printf(" (%s)", engine);
+            printf("\n");
+        }
+        live_props[p].stat = pstat_Falsified;
+        live_props[p].cex  = cex;
+        writeResultLive(p);
+    }
+
+
     void TipCirc::printResults() const
     {
         int n_proved    = 0;

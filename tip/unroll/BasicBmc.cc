@@ -217,9 +217,7 @@ void BasicBmc::decideCycle()
             Trace             cex    = tip.newTrace();
             vec<vec<lbool> >& frames = tip.traces[cex].frames;
             extractTrace(frames);
-            tip.safe_props[p].stat = pstat_Falsified;
-            tip.safe_props[p].cex  = cex;
-            tip.writeResultSafe(p);
+            tip.setFalsifiedSafe(p, cex, "bmc");
         }else
             unresolved_safety++;
     }
@@ -242,9 +240,7 @@ void BasicBmc::decideCycle()
                 Trace             cex    = tip.newTrace();
                 vec<vec<lbool> >& frames = tip.traces[cex].frames;
                 extractTrace(frames);
-                tip.live_props[p].stat = pstat_Falsified;
-                tip.live_props[p].cex  = cex;
-                tip.writeResultLive(p);
+                tip.setFalsifiedLive(p, cex, "bmc");
             }else
                 unresolved_liveness++;
         }

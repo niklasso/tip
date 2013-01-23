@@ -93,6 +93,18 @@ void SimpUnroller::operator()(Clausifyer<SimpSolver>& unroll_cl){
         flop_front[i] = l;
     }
 
+    // Assert constraints:
+    for (unsigned j = 0; j < tip.cnstrs.size(); j++){
+        Sig cx = tip.cnstrs[j][0];
+        Lit lx = unroll_cl.clausify(cx);
+        for (int k = 1; k < tip.cnstrs[j].size(); k++){
+            Sig cy = tip.cnstrs[j][k];
+            Lit ly = unroll_cl.clausify(cy);
+            solver.addClause(~lx, ly);
+            solver.addClause(~ly, lx);
+        }
+    }
+
     // Clausify safety properties:
     for (SafeProp p = 0; p < tip.safe_props.size(); p++){
         if (tip.safe_props[p].stat != pstat_Unknown)
@@ -177,10 +189,7 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
                             frames.last().push(l_Undef);
                 }
                 tip.adaptTrace(frames);
-                printf (" ... property falsified, created trace = %d of length %d.\n", cex, frames.size());
-                tip.safe_props[p].stat = pstat_Falsified;
-                tip.safe_props[p].cex  = cex;
-                tip.writeResultSafe(p);
+                tip.setFalsifiedSafe(p, cex, "sbmc");
             }else{
                 unresolved_safety++;
                 assert(s.value(plit) == l_True);
