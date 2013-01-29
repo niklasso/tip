@@ -65,11 +65,11 @@ set_target_properties(tip-lib-shared
 
 add_executable(tip tip/Main.cc)
 
-if(STATIC_BINARIES)
+#if(STATIC_BINARIES)
   target_link_libraries(tip tip-lib-static)
-else()
-  target_link_libraries(tip tip-lib-shared)
-endif()
+#else()
+#  target_link_libraries(tip tip-lib-shared)
+#endif()
 
 
 #--------------------------------------------------------------------------------------------------
