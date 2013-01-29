@@ -170,6 +170,7 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
                            solve_time, simp_time, total_time);
                 else
                     printf("\n");
+                fflush(stdout);
             }
 
             double solve_time_before = cpuTime();
@@ -193,6 +194,7 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
             }else{
                 unresolved_safety++;
                 assert(s.value(plit) == l_True);
+                tip.setRadiusSafe(p, i+1, "sbmc");
             }
         }
 
@@ -214,6 +216,7 @@ void simpBmc(TipCirc& tip, uint32_t begin_cycle, uint32_t stop_cycle)
         else
             printf("\n");
         s.printStats();
+        fflush(stdout);
     }
 }
 

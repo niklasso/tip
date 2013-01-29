@@ -35,6 +35,11 @@ namespace Tip {
             unsigned       init_frame_size;
             vec<vec<int> > init_num_map;
 
+            void patchRadius(unsigned& radius)
+            {
+                radius += init_num_map.size();
+            }
+
             void patch(vec<vec<lbool> >& frames)
             {
                 vec<vec<lbool> > new_frames;

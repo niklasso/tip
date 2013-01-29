@@ -218,8 +218,10 @@ void BasicBmc::decideCycle()
             vec<vec<lbool> >& frames = tip.traces[cex].frames;
             extractTrace(frames);
             tip.setFalsifiedSafe(p, cex, "bmc");
-        }else
+        }else {
             unresolved_safety++;
+            tip.setRadiusSafe(p, depth()+1, "bmc");
+        }
     }
 
     // Do SAT-tests:
@@ -263,6 +265,7 @@ void BasicBmc::printStats(bool final)
                cycle, (double)s.nFreeVars(), (double)s.nClauses(), (double)s.conflicts, solve_time);
         if (final)
             s.printStats();
+        fflush(stdout);
     }
 }
 

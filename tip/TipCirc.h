@@ -51,8 +51,9 @@ struct TraceData {
 struct SafePropData {
     Sig        sig;
     PropStatus stat;
+    unsigned   radius;
     Trace      cex;
-    SafePropData(Sig s) : sig(s), stat(pstat_Unknown), cex(trace_Undef){}
+    SafePropData(Sig s) : sig(s), stat(pstat_Unknown), radius(0), cex(trace_Undef){}
 };
 
 struct LivePropData {
@@ -75,8 +76,14 @@ public:
         if (chain != NULL) chain->adapt(frames);
     }
 
+    void adaptRadius(unsigned& radius){
+        patchRadius(radius);
+        if (chain != NULL) chain->adaptRadius(radius);
+    }
+
 private:
-    virtual void patch(vec<vec<lbool> >& frames) = 0;
+    virtual void patch(vec<vec<lbool> >& frames){};
+    virtual void patchRadius(unsigned& radius){}
 };
 
 
@@ -227,6 +234,7 @@ public:
     LiveProp newLiveProp     (const vec<Sig>& x);
     Trace    newTrace        ();
     void     adaptTrace      (vec<vec<lbool> >& frames);
+    void     setRadiusSafe   (SafeProp p, unsigned radius, const char* engine = NULL);
     void     setProvenSafe   (SafeProp p, const char* engine = NULL);
     void     setProvenLive   (LiveProp p, const char* engine = NULL);
     void     setFalsifiedSafe(SafeProp p, Trace, const char* engine = NULL);

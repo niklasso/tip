@@ -1185,6 +1185,7 @@ namespace Tip {
                             tip.setProvenSafe(p, "rip");
                         }else if (prop_res == l_Undef){
                             // Done with 'p' for this cycle:
+                            tip.setRadiusSafe(p, safe_depth + opt_pdepth + 1, "rip");
                             unresolved++;
                         }
                     }while (prop_res == l_False);
