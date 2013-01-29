@@ -475,6 +475,7 @@ namespace Tip {
     InitInstance::~InitInstance(){ }
 
     uint64_t InitInstance::props (){ return solver->propagations; }
+    uint64_t InitInstance::confl (){ return solver->conflicts; }
     uint64_t InitInstance::solves(){ return solver->solves; }
     double   InitInstance::time  (){ return cpu_time; }
 
@@ -775,6 +776,7 @@ namespace Tip {
     PropInstance::~PropInstance(){ }
 
     uint64_t PropInstance::props (){ return solver->propagations; }
+    uint64_t PropInstance::confl (){ return solver->conflicts; }
     uint64_t PropInstance::solves(){ return solver->solves; }
     double   PropInstance::time  (){ return cpu_time; }
     unsigned PropInstance::depth (){ return depth_; }
@@ -1089,6 +1091,7 @@ namespace Tip {
     StepInstance::~StepInstance(){ }
 
     uint64_t StepInstance::props (){ return solver->propagations; }
+    uint64_t StepInstance::confl (){ return solver->conflicts; }
     uint64_t StepInstance::solves(){ return solver->solves; }
     double   StepInstance::time  (){ return cpu_time; }
 

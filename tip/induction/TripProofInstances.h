@@ -137,6 +137,7 @@ namespace Tip {
 
         uint64_t props();
         uint64_t solves();
+        uint64_t confl();
         double   time();
 
         void printStats();
@@ -191,6 +192,7 @@ namespace Tip {
 
         uint64_t props();
         uint64_t solves();
+        uint64_t confl();
         double   time();
         unsigned depth();
 
@@ -243,6 +245,7 @@ namespace Tip {
 
         uint64_t props();
         uint64_t solves();
+        uint64_t confl();
         double   time();
 
         void printStats();

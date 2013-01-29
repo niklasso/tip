@@ -1326,6 +1326,8 @@ namespace Tip {
             printf("SAT-solving:      Init-Instance  Step-Instance Prop-Instance\n");
             printf("  Solves:          %12"PRIu64"   %12"PRIu64"  %12"PRIu64"\n",
                    init.solves(), step.solves(), prop.solves());
+            printf("  Conflicts:       %12"PRIu64"   %12"PRIu64"  %12"PRIu64"\n",
+                   init.confl(), step.confl(), prop.confl());
             printf("  Propagations:    %12"PRIu64"   %12"PRIu64"  %12"PRIu64"\n",
                    init.props(), step.props(), prop.props());
             printf("  CPU-Time:        %12.1f s %12.1f s %12.1f s\n",
