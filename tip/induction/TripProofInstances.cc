@@ -727,7 +727,7 @@ namespace Tip {
             subModel(outputs, *cl, outputs_set);
             outputs_set.insert(~uc.lookup(p, depth()));
             assert(cl->modelValue(~uc.lookup(p, depth())) == l_True);
-            shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 3);
+            shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 4);
 
             vec<vec<lbool> > frames;
             vec<Sig>         clause;
@@ -1023,7 +1023,7 @@ namespace Tip {
                 subModel(outputs, *cl, outputs_set);
                 outputs.shrink(c.size());
 
-                shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 3);
+                shrinkModel(*solver, *cl, inputs_set, flops_set, outputs_set, max_min_tries, tip.verbosity >= 4);
 
                 vec<vec<lbool> > frames;
                 vec<Sig>         clause;

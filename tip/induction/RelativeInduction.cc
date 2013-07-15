@@ -340,13 +340,13 @@ namespace Tip {
                     if (step.prove(cand, e) && init.prove(cand, e, d)){
                         reset = index;
                         i     = 0;
-                        if (tip.verbosity >= 3) printf(".%d", d.size());
+                        if (tip.verbosity >= 4) printf(".%d", d.size());
                         assert(subsumes(d, cand));
                     }else
-                        if (tip.verbosity >= 3) printf(".");
+                        if (tip.verbosity >= 4) printf(".");
                 }
             }
-            if (tip.verbosity >= 3) printf("\n");
+            if (tip.verbosity >= 4) printf("\n");
             
             assert(subsumes(d, c));
             c = d;
@@ -394,7 +394,7 @@ namespace Tip {
                 assert(subsumes(yes_step, yes_init));
                 yes_step = yes_init;
 
-                if (tip.verbosity >= 3) printf("[generalize] %d.%d", c->size(), yes_step.size());
+                if (tip.verbosity >= 4) printf("[generalize] %d.%d", c->size(), yes_step.size());
 
 #ifdef GENERALIZE_THEN_PUSH
                 generalize(yes_step);
@@ -443,7 +443,7 @@ namespace Tip {
             if (!step.prove(c, yes_step))
                 return false;
 
-            if (tip.verbosity >= 4 && c.cycle < yes_step.cycle)
+            if (tip.verbosity >= 5 && c.cycle < yes_step.cycle)
                 printf("[proveStep] clause was proved in the future: %d -> %d\n",
                        c.cycle, yes_step.cycle);
 
@@ -654,7 +654,7 @@ namespace Tip {
                     n_removed++, delete F_inv[i];
             F_inv.shrink(i - j);
 
-            if (tip.verbosity >= 4)
+            if (tip.verbosity >= 5)
                 printf("[clearInactive] removed %d inactive clauses\n", n_removed);
         }
 
@@ -790,7 +790,7 @@ namespace Tip {
                                 cls_added--;
                                 inv_size++;
                             }
-                    if (tip.verbosity >= 3)
+                    if (tip.verbosity >= 4)
                         printf("[extractInvariant] extracted invariant of size %d\n", inv_size);
 
                     return;
@@ -999,7 +999,7 @@ namespace Tip {
         void Trip::pushClauses()
         {
             if (cls_added - last_push < (uint64_t)((double)n_total * push_limit)){
-                if (tip.verbosity >= 3) printf("[pushClauses] skipped\n");
+                if (tip.verbosity >= 4) printf("[pushClauses] skipped\n");
                 return; }
             last_push = cls_added;
 
@@ -1289,7 +1289,7 @@ namespace Tip {
                 fflush(stdout);
             }
 
-            if (newline && tip.verbosity >= 3){
+            if (newline && tip.verbosity >= 4){
                 printf("[rip-stats] #clauses=%d, depth=%d\n", n_total, depth());
                 init.printStats();
                 prop.printStats();
@@ -1411,7 +1411,7 @@ namespace Tip {
 #ifdef VERIFY_INVARIANT
                 trip.verifyInvariant();
 #endif
-                if (tip.verbosity >= 4){
+                if (tip.verbosity >= 5){
                     printf("[relativeInduction] invariant:\n");
                     trip.printInvariant(); }
                 break;

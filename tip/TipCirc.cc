@@ -178,7 +178,7 @@ namespace Tip {
         tradaptor->adaptRadius(radius);
         if (safe_props[p].radius < radius) {
             safe_props[p].radius = radius;
-            if (verbosity >= 1){
+            if (verbosity >= 3){
                 printf("[tip] Property %d reached radius %d", p, radius);
                 if (engine != NULL)
                     printf(" (%s)", engine);
@@ -279,8 +279,8 @@ namespace Tip {
                 fprintf(resultFile, "0\nb%d\n", p);
                 fprintf(resultFile, ".\n");
             }else{
-                fprintf(resultFile, "0 %d\nb%d\n", safe_props[p].radius, p);
-                fprintf(resultFile, ".\n");
+                // fprintf(resultFile, "0 %d\nb%d\n", safe_props[p].radius, p);
+                // fprintf(resultFile, ".\n");
             }
             fflush(resultFile);
         }
