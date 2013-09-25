@@ -17,6 +17,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
+#include "minisat/utils/System.h"
 #include "mcl/Aiger.h"
 #include "mcl/CircPrelude.h"
 #include "tip/TipCirc.h"
@@ -252,10 +253,23 @@ namespace Tip {
             else
                 n_unknown++;
 
+        double time    = cpuTime();
+        double peakMem = memUsedPeak(true);
+
+        printf("Resources used\n");
+        printf("================================================================================\n");
+        printf("  CPU time:       %.2f s\n",  time);
+        if (peakMem > 0) {
+          printf("  Peak memory:    %.1f Mb\n", peakMem);
+        } else {
+          printf("  Current memory: %.1f Mb\n", memUsed());
+        }
+        printf("\n");
+
         printf("Verification results\n");
         printf("================================================================================\n");
-        printf("  Proved :    %d\n", n_proved);
-        printf("  Falsified : %d\n", n_falsified);
+        printf("  Proved:     %d\n", n_proved);
+        printf("  Falsified:  %d\n", n_falsified);
         printf("  Unknown:    %d\n", n_unknown);
     }
 
