@@ -184,6 +184,7 @@ namespace Tip {
                 if (engine != NULL)
                     printf(" (%s)", engine);
                 printf("\n");
+                fflush(stdout);
             }
             writeResultSafe(p);
         }
