@@ -173,7 +173,7 @@ install-headers:
 	$(INSTALL) -d $(DESTDIR)$(includedir)/tip
 #       Install headers
 	for h in $(HDRS) ; do \
-	  $(INSTALL) -m 644 $$h $(DESTDIR)$(includedir)/$$h ; \
+	  $(INSTALL) -D -m 644 $$h $(DESTDIR)$(includedir)/$$h ; \
 	done
 
 install-lib: $(BUILD_DIR)/release/lib/$(TIP_SLIB) $(BUILD_DIR)/dynamic/lib/$(TIP_DLIB).$(SOMAJOR).$(SOMINOR)$(SORELEASE)
